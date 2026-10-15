@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<style>
+/* @styles */
+</style>
+<div class="wrap">
+  <h1>Yemen displacement network</h1>
+  <p class="sub">Each dot is a district. Each curved line is a route people took between two districts, from 4 January to 11 October 2026. Small lights travel along a line from where people left to where they arrived.</p>
+
+  <div class="stage" id="stage">
+    <canvas id="cv" role="img" aria-label="Network of Yemeni districts linked by displacement routes. A table view with the largest districts is below the chart."></canvas>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="ctl">
+    <div class="seg" role="group" aria-label="Layout">
+      <button id="bNet" type="button" aria-pressed="true">Network</button>
+      <button id="bMap" type="button" aria-pressed="false">Map</button>
+    </div>
+    <div class="seg" id="segMap" role="group" aria-label="Background map" hidden>
+      <button id="bDark" type="button" aria-pressed="true">Dark</button>
+      <button id="bLight" type="button" aria-pressed="false">Light</button>
+      <button id="bTerrain" type="button" aria-pressed="false">Terrain</button>
+      <button id="bSat" type="button" aria-pressed="false">Satellite</button>
+      <button id="bNone" type="button" aria-pressed="false">None</button>
+    </div>
+    <button class="play" id="bPlay" type="button">Play</button>
+    <div class="sl">
+      <label for="sl">Routes up to</label>
+      <input id="sl" type="range" min="0" max="280" step="1" value="280">
+      <span class="dt" id="dt"></span>
+    </div>
+    <button class="toggle" id="bLim" type="button" aria-pressed="true" hidden>Limits: districts</button>
+  </div>
+
+  <p class="bm" id="bm"></p>
+
+  <ul class="legend">
+    <li><span class="sw" style="background:var(--recv)"></span>More arrivals than departures</li>
+    <li><span class="sw" style="background:var(--send)"></span>More departures than arrivals</li>
+    <li><span class="sw" style="background:var(--bal)"></span>Roughly balanced</li>
+    <li><span class="ring"></span>Ring: people also moved inside this district</li>
+    <li><span class="ln"></span>Between governorates</li>
+    <li><span class="ln d"></span>Within one governorate</li>
+    <li><span class="bnd"></span>Governorate limit (map view)</li>
+    <li><span class="bnd f"></span>District limit (map view)</li>
+  </ul>
+
+  <details id="tv">
+    <summary>Table view: 15 busiest districts for the chosen date</summary>
+    <div class="tw"><table>
+      <thead><tr><th>District</th><th>Governorate</th><th>Arrived</th><th>Left</th><th>Inside</th><th>Net</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+  </details>
+
+  <div class="note">
+    <p>Dot size shows all households that moved into, out of or within the district. Line thickness shows households on that route. Hover a dot to see only its routes.</p>
+    <p>In Network layout, districts that exchange many households sit close together, so distance has no geographic meaning. Switch to Map to place each district at its centre point on a real map of Yemen, with district limits (Natural Earth ADM2) and governorate limits (geoBoundaries ADM1). The Limits button switches between the two or hides them.</p>
+    <p>Background maps are public tile servers that need no API key and no sign-up: Esri dark gray, Esri light gray, Esri satellite, OpenTopoMap, Wikimedia Maps, OpenStreetMap France and OpenStreetMap. If a server refuses the tiles, the map switches to the next one by itself.</p>
+    <p>Source: IOM DTM Rapid Displacement Tracking, district level. Households are counted from assessments and added up from 4 January to the date chosen, so a family assessed twice counts twice.</p>
+  </div>
+</div>
+<div class="tip" id="tip" role="presentation"></div>
+<script>
+// @script
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+{
+  "name": "deplacement",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Yemen displacement network \u2014 standalone visualisation with keyless basemaps and embedded admin limits",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "test": "node --test test/*.test.mjs",
+    "format": "prettier --write src tools test build.mjs",
+    "format:check": "prettier --check src tools test build.mjs",
+    "render": "node tools/render-map.mjs",
+    "boundaries": "node tools/build-boundaries.mjs",
+    "serve": "python3 -m http.server 8000 --bind 0.0.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "index.html",
+    "src",
+    "data",
+    "build.mjs"
+  ],
+  "devDependencies": {
+    "prettier": "^3.9.10"
+  },
+  "keywords": [
+    "yemen",
+    "displacement",
+    "visualisation",
+    "canvas",
+    "tiles",
+    "geojson"
+  ],
+  "homepage": "https://github.com/pratisig/deplacement"
+}

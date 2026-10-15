@@ -1,0 +1,6 @@
+# generated
+index.html
+data/
+package-lock.json
+# page shell: kept as written, it is markup with build placeholders
+src/template.html
