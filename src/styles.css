@@ -1,0 +1,288 @@
+/* Layout: one dark canvas holds the network; controls sit under it, then legend, table view and notes.
+   Single dark look by choice: the piece is a night-time map of movement. */
+:root {
+  color-scheme: dark;
+  --bg: #07090c;
+  --panel: #0d1218;
+  --ink: #e6edf3;
+  --muted: #93a4b3;
+  --line: #212d38;
+  --recv: #3987e5;
+  --send: #d95926;
+  --bal: #b4c0cb;
+  --edge: #d9a066;
+  --spark: #ffeccb;
+  --focus: #6da7ec;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  --display: 'IBM Plex Sans Condensed', system-ui, 'Segoe UI', sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 24px 44px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.85rem;
+  letter-spacing: 0.01em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+.sub {
+  color: var(--muted);
+  margin: 0 0 16px;
+  max-width: 68ch;
+}
+.stage {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+canvas {
+  display: block;
+  width: 100%;
+  touch-action: pan-y;
+}
+.stats {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+  pointer-events: none;
+  max-width: calc(100% - 24px);
+}
+.stats b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.ctl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 0;
+  padding: 8px 14px;
+  cursor: pointer;
+  min-height: 36px;
+}
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+button[aria-pressed='true'] {
+  background: #1a2430;
+  box-shadow: inset 0 -2px 0 var(--recv);
+}
+button:hover {
+  background: #17212c;
+}
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.play {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-width: 84px;
+}
+.toggle {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.sl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.sl label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--recv);
+  height: 28px;
+}
+.dt {
+  color: var(--ink);
+  min-width: 9.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.bm {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  max-width: 96ch;
+}
+.bm b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.bm .warn {
+  color: #e0a458;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sw {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.ring {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+}
+.ln {
+  flex: none;
+  width: 26px;
+  height: 0;
+  border-top: 2px solid var(--edge);
+}
+.ln.d {
+  border-top-style: dashed;
+}
+.bnd {
+  flex: none;
+  width: 26px;
+  height: 0;
+  border-top: 1px solid #5b8ec9;
+}
+.bnd.f {
+  border-top-style: dotted;
+  border-color: #3f6b9e;
+}
+.note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: 84ch;
+  margin: 16px 0 0;
+}
+.note p {
+  margin: 0 0 8px;
+}
+details {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.tw {
+  overflow-x: auto;
+  padding: 0 14px 12px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 520px;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+th,
+td {
+  text-align: right;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+th:first-child,
+td:first-child,
+th:nth-child(2),
+td:nth-child(2) {
+  text-align: left;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tip {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  background: #e6edf3;
+  color: #0b1117;
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  max-width: 240px;
+  opacity: 0;
+  transition: opacity 0.08s;
+  font-variant-numeric: tabular-nums;
+}
+.tip b {
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    transition: none;
+  }
+}

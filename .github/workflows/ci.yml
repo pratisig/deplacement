@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Formatting
+        run: npm run format:check
+
+      - name: index.html is built from src/ and data/
+        run: npm run check
+
+      - name: Tests
+        run: npm test
+
+      - name: Render the map
+        run: npm run render
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: map-render
+          path: tools/out/map-check.png
