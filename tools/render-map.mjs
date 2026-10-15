@@ -5,6 +5,11 @@
    code, which is the point of the exercise.
  *
  *   node tools/render-map.mjs [--tiles] [--out tools/out/map-check.png]
+ *   node tools/render-map.mjs --html dist/arcgis-pro/demo.html --out docs/arcgis-demo.png
+ *
+ * --html renders any built page: index.html, an exported page, or one the
+ * ArcGIS toolbox wrote. The page's own dataset is used, so what comes out is
+ * the same geometry the browser would draw.
  *
  * Without --tiles only the tile *grid* is drawn (the sandbox this was built in
  * cannot reach map servers); with --tiles the actual raster tiles are fetched.
@@ -23,14 +28,22 @@ const out =
     ? args[args.indexOf('--out') + 1]
     : join(root, 'tools/out/map-check.png'));
 const withTiles = args.includes('--tiles');
+const htmlPath =
+  args.find(a => a.startsWith('--html='))?.slice(7) ??
+  (args.includes('--html') ? args[args.indexOf('--html') + 1] : join(root, 'index.html'));
 
 const WIDTH = 1150,
   HEIGHT = 713;
 
-/* Load the page script exactly as index.html runs it, then reuse its
-   projection: this is what makes the render a real alignment check. */
-const html = readFileSync(join(root, 'index.html'), 'utf8');
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+/* Run every script block in document order, exactly as a browser would: a
+   page that came out of an export — or out of the ArcGIS toolbox — carries
+   its dataset in a block ahead of the app. Then reuse the page's own
+   projection and paths, which is what makes this a real alignment check. */
+const html = readFileSync(htmlPath, 'utf8');
+const script = html
+  .match(/<script[^>]*>[\s\S]*?<\/script>/g)
+  .map(block => block.replace(/^<script[^>]*>|<\/script>$/g, ''))
+  .join('\n;\n');
 
 const ctxStub = new Proxy(
   { measureText: () => ({ width: 40 }), setLineDash() {} },
@@ -61,7 +74,6 @@ const element = id => ({
   getContext: () => ctxStub,
 });
 const els = {};
-const d3chain = () => new Proxy({}, { get: () => () => d3chain() });
 const sandbox = {
   document: {
     documentElement: { style: {} },
@@ -83,7 +95,6 @@ const sandbox = {
       })[k] || '#000',
   }),
   matchMedia: () => ({ matches: true }), // reduced motion: draw one frame
-  d3: new Proxy({}, { get: () => () => d3chain() }),
   Image: class {
     set src(v) {
       this._src = v;
@@ -105,14 +116,16 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
   script +
-    ';globalThis.__T={MAP,mercX,mercY,project,size,B,N,D,ADM1,ADM2,GOVPATH:()=>GOVPATH,' +
-    'DISTPATH:()=>DISTPATH,PROV,STYLE,chainOf:s=>STYLE[s].chain};',
+    ';globalThis.__T={MAP:()=>MAP,mercX,mercY,project,size,B:()=>B,N:()=>N,D:()=>D,EXAMPLE,' +
+    'GOVPATH:()=>GOVPATH,DISTPATH:()=>DISTPATH,PROV,STYLE,loadSource,' +
+    'chainOf:s=>STYLE[s].chain};',
   sandbox,
 );
 const T = sandbox.__T;
+if (!T.D().nodes.length) T.loadSource(T.EXAMPLE); // a page with no data of its own
+const MAP = T.MAP();
 
 const canvas = new Canvas(WIDTH, HEIGHT);
-const { MAP } = T;
 const z = MAP.z,
   k = MAP.s,
   TX = 256;
@@ -170,7 +183,7 @@ for (const { rings } of Object.values(T.GOVPATH())) {
 
 /* ------------------------------------------------------- points and labels */
 let placed = 0;
-for (const n of T.N) {
+for (const n of T.N()) {
   const x = px(n.lon),
     y = py(n.lat);
   canvas.disc(x, y, 3, [57, 135, 229], 1);
@@ -186,8 +199,12 @@ const report = {
   governorates: Object.keys(T.GOVPATH()).length,
   points: placed,
   frame: {
-    x: [Math.min(...T.N.map(n => px(n.lon))), Math.max(...T.N.map(n => px(n.lon)))].map(Math.round),
-    y: [Math.min(...T.N.map(n => py(n.lat))), Math.max(...T.N.map(n => py(n.lat)))].map(Math.round),
+    x: [Math.min(...T.N().map(n => px(n.lon))), Math.max(...T.N().map(n => px(n.lon)))].map(
+      Math.round,
+    ),
+    y: [Math.min(...T.N().map(n => py(n.lat))), Math.max(...T.N().map(n => py(n.lat)))].map(
+      Math.round,
+    ),
   },
 };
 

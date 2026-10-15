@@ -48,8 +48,8 @@ function project() {
   }
   GOVPATH = {};
   DISTPATH = {};
-  for (const gov in ADM1) {
-    const rings = ADM1[gov].p.map(flat => {
+  for (const gov in D.admin1 || {}) {
+    const rings = D.admin1[gov].p.map(flat => {
       const pts = [];
       for (let i = 0; i < flat.length; i += 2)
         pts.push([
@@ -58,16 +58,17 @@ function project() {
         ]);
       return pts;
     });
-    const c = ADM1[gov].c
+    const centre = D.admin1[gov].c;
+    const c = centre
       ? [
-          MAP.ox + (mercX(ADM1[gov].c[0], z) - MAP.minX) * k,
-          MAP.oy + (mercY(ADM1[gov].c[1], z) - MAP.minY) * k,
+          MAP.ox + (mercX(centre[0], z) - MAP.minX) * k,
+          MAP.oy + (mercY(centre[1], z) - MAP.minY) * k,
         ]
       : null;
     GOVPATH[gov] = { rings, c };
   }
-  for (const name in ADM2) {
-    const rings = ADM2[name].map(flat => {
+  for (const name in D.admin2 || {}) {
+    const rings = D.admin2[name].p.map(flat => {
       const pts = [];
       for (let i = 0; i < flat.length; i += 2)
         pts.push([

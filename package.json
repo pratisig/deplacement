@@ -2,7 +2,7 @@
   "name": "deplacement",
   "version": "1.0.0",
   "private": true,
-  "description": "Yemen displacement network \u2014 standalone visualisation with keyless basemaps and embedded admin limits",
+  "description": "Flow map — a standalone visualisation for any origin/destination table, with keyless basemaps, embedded admin limits and GIS exports",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,8 +12,11 @@
     "format": "prettier --write src tools test build.mjs",
     "format:check": "prettier --check src tools test build.mjs",
     "render": "node tools/render-map.mjs",
+    "arcgis:selftest": "python3 arcgis/flowmap_core.py selftest && python3 tools/arcgis/toolcheck.py --out tools/out/arcgis-tool.html --json tools/out/arcgis-tool.json",
+    "package:arcgis": "node tools/package-arcgis.mjs",
     "boundaries": "node tools/build-boundaries.mjs",
-    "serve": "python3 -m http.server 8000 --bind 0.0.0.0"
+    "serve": "python3 -m http.server 8000 --bind 0.0.0.0",
+    "verify:exports": "node --test test/export.test.mjs && python3 tools/verify-exports.py"
   },
   "engines": {
     "node": ">=18"
@@ -22,18 +25,27 @@
     "index.html",
     "src",
     "data",
+    "arcgis",
+    "vendor",
     "build.mjs"
   ],
   "devDependencies": {
+    "d3-force": "^3.0.0",
     "prettier": "^3.9.10"
   },
   "keywords": [
+    "flow-map",
+    "origin-destination",
+    "csv",
+    "geojson",
+    "geoparquet",
+    "shapefile",
+    "gif",
+    "arcgis-pro",
+    "python-toolbox",
     "yemen",
     "displacement",
-    "visualisation",
-    "canvas",
-    "tiles",
-    "geojson"
+    "visualisation"
   ],
   "homepage": "https://github.com/pratisig/deplacement"
 }

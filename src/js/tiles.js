@@ -131,10 +131,11 @@ function providerFailed(p) {
   }
   updateStatus();
 }
-function drawBasemap() {
+function drawBasemap(alpha = 1) {
   const st = STYLE[style],
     p = curProv();
-  if (!p) return;
+  if (!p || alpha <= 0.02) return;
+  ctx.globalAlpha = alpha;
   const z = MAP.z;
   const x0 = Math.floor(MAP.minX / TX) - 1,
     x1 = Math.floor((MAP.minX + MAP.spanX) / TX) + 1;
@@ -154,21 +155,25 @@ function drawBasemap() {
     ctx.fillStyle = 'rgba(7,9,12,' + st.overlay + ')';
     ctx.fillRect(0, 0, W, H);
   }
+  ctx.globalAlpha = 1;
 }
 
 /* The line under the controls: which map is in use, or why there is none. */
 function updateStatus() {
   const p = curProv();
-  let s = '';
-  if (mode !== 'map') {
+  let s;
+  const hasLimits = Boolean(D.admin1 || D.admin2);
+  if (blend > 0.6) {
     s =
-      'Background map and governorate limits appear in <b>Map</b> layout. Every source is a public tile server: no API key, no account.';
+      'Network layout — the map is hidden. Drag the layout slider back towards Geo to see it again.';
+    if (hasLimits) s += ' Loaded limits: ' + limitLayers().length + '.';
   } else if (style === 'none') {
     s =
-      'No background map — districts sit on their true coordinates and the governorate limits are drawn.';
+      'No background map — places sit on their true coordinates' +
+      (hasLimits ? ', with the administrative limits drawn.' : '.');
   } else if (!p) {
     s =
-      'No background map available — districts are still placed on their true coordinates. <span class="warn">' +
+      'No background map available — places are still placed on their true coordinates. <span class="warn">' +
       provMsg +
       '</span>';
   } else {

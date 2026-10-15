@@ -1,36 +1,99 @@
-# deplacement
+# deplacement — flow map
 
-**Yemen displacement network** — where Yemeni households moved between districts,
-day by day, from 4 January to 11 October 2026 (IOM DTM Rapid Displacement
-Tracking, district level).
+**Any origin→destination table, on a map, in one HTML file.**
+
+Drop in a CSV of movements — displaced households, trips, trade, migration — and
+you get an interactive map: places at their real coordinates, flows between them,
+a timeline, administrative limits, and exports for whatever comes next (animated
+GIF, video, GeoJSON, GeoParquet, shapefiles, CSV).
+
+The built-in example is Yemeni displacement: 227 districts, 2 832 routes, IOM DTM
+Rapid Displacement Tracking, 4 January – 11 October 2026.
 
 ![The map view](docs/map.png)
 
-`index.html` is the whole app: one file, no build needed to run it, no API key,
-no server. Open it and it works, including offline — the data and the
-administrative limits are inside the file.
+`index.html` is the whole app. No build step to run it, no API key, no server, no
+upload: open it and it works, offline included.
 
-## Using it
+## Loading your own table
 
-* **Network** — a force-directed graph: one dot per district, one curved line per
-  route, dots coloured by net arrivals (blue) / departures (orange) / balanced
-  (grey), and small travellers moving along the busiest routes.
-* **Map** — the same data at each district's real coordinates, over a background
-  map, with **district limits** and **governorate limits** drawn on top. The
-  *Limits* button cycles districts → governorates → off, and hovering a district
-  highlights it.
-* **Basemap** — Dark, Light, Terrain, Satellite or None. Every one of them is a
-  public tile server with no account and no key.
-* **Timeline** — drag the slider or press *Play* to run through the period; the
-  header date, the totals, the table and the routes all follow it.
-* **Table** — the fifteen busiest districts for the selected day, with arrivals,
-  departures, moves inside the district and the net figure.
+Press **Load data…** (or drop a file anywhere on the page). Nothing is uploaded —
+the file is read in the browser and stays there.
+
+The table is one row per flow:
+
+| origin_name | origin_lon | origin_lat | destination_name | destination_lon | destination_lat | date | value |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Bamako | -7.99 | 12.65 | Ségou | -6.26 | 13.43 | 2026-01-04 | 120 |
+| Ségou | -6.26 | 13.43 | Mopti | -4.19 | 14.49 | 2026-01-11 | 85 |
+
+* **CSV, TSV, semicolon- or pipe-separated, a JSON array of rows, or a GeoJSON
+  FeatureCollection.** The delimiter and the encoding are detected.
+* **Columns are detected from the header row** — origin/destination, coordinates,
+  a date or a day number, and a value — and you can correct every guess in the
+  dialog before building the map. Headers in English, French or Spanish are
+  recognised (`origine`, `ménages`, `destino`, `fecha`, …).
+* **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
+  up to two levels). Places are then matched to areas by name — accents, casing
+  and spelling wobbles tolerated — and the areas become the limits layer.
+* **A row can be its own origin and destination** (a self-loop): that counts as
+  movement inside the place, which is how the example treats internal
+  displacement.
+* Rows that cannot be placed are **reported, not silently dropped**.
+* Press **Template CSV** for a file you can fill in.
+
+Everything downstream follows the file: the title, the unit in the stats line,
+the labels in the legend, the table headings and the time axis.
+
+## The view
+
+One canvas, one layout slider:
+
+* **Geo** — places at their true coordinates, over a background map, with the
+  administrative limits you loaded.
+* **Network** — a force layout where places that exchange many flows sit close
+  together. Useful for seeing structure, but distance stops meaning geography, so
+  the basemap fades out and a note says so.
+* **In between** — the slider blends the two, so places slide from one position
+  to the other. There is no mode switch to hunt for.
+
+Also in the bar: **Play** and the timeline (running totals up to the chosen date),
+the basemap switch, the limits switch, **Load data…** and **Export**.
+
+Hover any dot for its arrivals, departures, internal moves and net figure; its
+routes stay lit while the rest fade. The table view below lists the busiest
+places for the selected date.
+
+## Exports
+
+| Export | What you get |
+| --- | --- |
+| **Animation (GIF)** | The whole period as an animated GIF, encoded in the browser. |
+| **Animation (video)** | The timeline recorded as a WebM video (MediaRecorder). |
+| **Data (JSON)** | The current day: places, flows and totals. |
+| **Data (CSV)** | Two tables — places and flows — for the current day. |
+| **Map (GeoJSON)** | Points, flow lines and area outlines. |
+| **Map (GeoParquet)** | One table with WKB geometry and GeoParquet 1.1 metadata. |
+| **Map (Shapefile)** | A ZIP of `places.shp`, `flows.shp`, `areas.shp` with `.shx`, `.dbf` and `.prj`. |
+| **Page (self-contained)** | This whole app with your data baked in — one HTML file, works offline, ready to hand over or publish. |
+
+The GIS formats are written from scratch in `src/js/`: a Parquet writer with the
+Thrift compact protocol and hand-rolled WKB, a shapefile/ZIP writer, and a GIF
+encoder with median-cut quantisation and LZW. Nothing is fetched or bundled.
+**Page (self-contained)** re-emits the app's own markup with the current dataset
+ahead of the script, so the result is a normal page that boots with your data —
+the round trip is covered by a test that exports a page and opens it cold.
+
+Two notes: cross-origin map tiles make the canvas unreadable, so the GIF falls
+back to a basemap-free export (the page tells you when it does), and dBase field
+names are ASCII, so accented names are transliterated *in the shapefile only* —
+GeoJSON and GeoParquet keep the original spelling.
 
 ## Basemaps: keyless by design
 
-CARTO basemaps now answer `403 Required API key`, and the standard OpenStreetMap
-tile servers refuse requests that do not come from a browser on their own site,
-which is where the original `403` came from. Both are gone. What is used instead:
+CARTO basemaps answer `403 Required API key`, and the standard OpenStreetMap tile
+servers refuse requests that do not come from their own site — which is where the
+original `403` came from. Both are gone:
 
 | Style | First choice | Then |
 | --- | --- | --- |
@@ -38,95 +101,145 @@ which is where the original `403` came from. Both are gone. What is used instead
 | Light | Esri *World Light Gray Canvas* | Wikimedia Maps → OSM France → OSM |
 | Terrain | OpenTopoMap | Wikimedia Maps → OSM France → OSM |
 | Satellite | Esri *World Imagery* (dimmed) | CyclOSM → OSM France → OSM |
-| None | — (limits only) | — |
+| None | — (your data and limits only) | — |
 
 * **Nothing needs a key, a token or a sign-up.**
-* If a server refuses the tiles (403, blocked, offline), the map **moves on to the
-  next provider by itself** and says so in the line under the controls — it never
-  fails silently into a grey void. A single missing tile is not treated as a dead
-  server: it takes a sustained run of failures, and picking a style again retries
-  from the top.
+* If a server refuses the tiles, the map **moves to the next provider by itself**
+  and says so under the controls. A single missing tile is not a dead server; it
+  takes a sustained run of failures, and picking a style again retries from the top.
 * Light providers used under the Dark style are filtered through CSS
   `invert/hue-rotate`, so a fallback still matches the dark theme.
-* Commercial providers were avoided on purpose; the OSM project servers stay last
-  in every chain because their [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
-  is the strictest. Still, these are third-party services: for a permanent
-  deployment, point the `PROV` table in `src/js/tiles.js` at your own tile
-  server.
+* Commercial providers were avoided deliberately, and the OSM project servers
+  stay last in every chain because their
+  [tile usage policy](https://operations.osmfoundation.org/policies/tiles/) is
+  the strictest. For a permanent deployment, point the `PROV` table in
+  `src/js/tiles.js` at your own tile server.
 
 ## Administrative limits
 
-Both layers are embedded in `index.html`, so they never depend on a tile API or
-on the network:
+Both layers are embedded in the page, so they never depend on a tile API:
 
 * **Governorates** — Natural Earth 1:10m admin-1 (public domain).
 * **Districts** — DIVA-GIS district layer, recovered from a TopoJSON file whose
   declared transform does not match its own coordinates (see `data/README.md`).
 
-Projection is real Web Mercator, shared by the tiles, the district dots and the
-limits, which is why they line up exactly. The zoom is the deepest one whose
-256 px tiles still land on ~110 CSS px, and the frame covers the whole country,
-Socotra included.
+Boundary files you load yourself are simplified on the fly, and the label point
+of each area is placed inside its own outline. Projection is real Web Mercator,
+shared by tiles, points and limits. The zoom is the deepest one whose 256 px tiles
+still land on ~110 CSS px, and the frame covers everything loaded.
+
+## In ArcGIS Pro
+
+The same page can be produced from inside a project. `arcgis/FlowMap.pyt` is a
+Python toolbox: point it at a flow table, optionally a places layer and outline
+polygons, press Run, and it writes the same self-contained HTML file — the map,
+the timeline, the exports, all of it.
+
+```
+Insert > Toolbox > Add Toolbox…   pick FlowMap.pyt
+Flow map > Build a flow map page  choose your layers
+```
+
+Everything that decides what the page shows lives in `arcgis/flowmap_core.py`,
+which imports nothing but the standard library, so it runs (and is tested)
+without ArcGIS:
+
+```sh
+python3 arcgis/flowmap_core.py selftest                          # 29 checks
+python3 arcgis/flowmap_core.py demo --out demo.html               # a page from an invented table
+python3 arcgis/flowmap_core.py build --input spec.json --out page.html
+node tools/package-arcgis.mjs                                     # dist/ + a zip for Pro
+```
+
+Geometries are read through a cursor asking for WGS84, so a project in metres
+still lands in the right place; names are matched to the places layer and the
+outlines ignoring accents, case and decorations; dates become days counted from
+the earliest one; a value of 0 or a name that cannot be found is dropped and
+reported. `arcgis/README.md` has the parameter list, three worked recipes, the
+recipe for a .NET dockpane add-in, and what the tests do and do not cover.
 
 ## Layout
 
 ```
 index.html               the built app — the only file a visitor needs
-src/template.html        page shell: markup, controls, notes
+src/template.html        page shell: markup, controls, loader dialog, notes
 src/styles.css           dark theme
-src/js/                  the app, split into load-order modules
+src/js/                  the app, in load order (no imports; build.mjs concatenates)
   core.js                DOM handles, theme colours, formatters
-  dataset.js             districts, routes, map frame
-  projection.js          Web Mercator, tiling and limit projection
+  geo.js                 ring areas, centroids, simplification, point-in-polygon
+  table.js               CSV/TSV/JSON/GeoJSON reader and column detection
+  sources.js             table + boundaries -> dataset, geocoding by name
+  dataset.js             the active dataset, normalising boundary layers
+  projection.js          Web Mercator, tiling, limits projection
   tiles.js               tile providers, fallback chains, status line
-  limits.js              district and governorate outlines
-  aggregate.js           day-by-day totals and route list
-  simulate.js            force layout / map pinning
+  limits.js              area outlines and labels
+  aggregate.js           day-by-day totals, routes, stats line
+  simulate.js            force layout and the geo/network blend
   render.js              one draw pass
-  ui.js                  controls, events, boot
-data/                    the three embedded payloads (see data/README.md)
-test/                    Node test suite (stubbed DOM, canvas, d3, tiles)
-tools/build-boundaries.mjs   rebuild the boundary payloads from source
-tools/render-map.mjs         render the map view to a PNG for eyeballing
-build.mjs                glues src/ + data/ into index.html
+  gif.js                 animated GIF encoder (median cut + LZW)
+  shp.js                 shapefile + ZIP writer
+  parquet.js             GeoParquet writer (Thrift compact, WKB)
+  export.js              snapshots, downloads, frame capture
+  ui.js                  controls, events, loader, boot
+vendor/d3-force.js       the one library the page uses, inlined by build.mjs
+                         (generated by tools/vendor-d3.mjs, self-checked)
+data/                    the built-in example (see data/README.md)
+arcgis/                  the ArcGIS Pro side: FlowMap.pyt + flowmap_core.py
+                         (see arcgis/README.md)
+test/                    Node test suite: stubbed DOM, canvas, tiles, blobs
+                         — nothing is injected that the page does not carry itself
+tools/build-boundaries.mjs  rebuild the example boundaries from source
+tools/render-map.mjs        render any built page to a PNG for eyeballing
+tools/verify-exports.py     read the exports back with pyarrow/pyshp/Pillow/geopandas
+tools/vendor-d3.mjs         rebuild the inlined d3-force bundle
+tools/arcgis/               a stand-in for arcpy, and the checks that drive the toolbox
+build.mjs                glues vendor/ + src/ + data/ into index.html
 ```
-
-The modules have no imports: `build.mjs` concatenates them in the order above, so
-they end up in one `<script>` and `index.html` stays a single file. Nothing in
-`src/` is loaded by a browser directly.
 
 ## Working on it
 
 ```sh
-npm install          # prettier only
-npm run build        # src/ + data/  ->  index.html
-npm run check        # fail if index.html is out of date
-npm test             # 17 tests: data, projection, fallback, limits, rendering
-npm run render       # write tools/out/map-check.png
-npm run boundaries   # rebuild data/boundaries-*.json from source
-npm run serve        # static server on :8000
+npm install             # prettier only
+npm run build           # vendor/ + src/ + data/  ->  index.html
+npm run check           # fail if index.html is out of date
+npm test                # the whole suite: page, loader, exports, boundaries, ArcGIS
+npm run render          # write tools/out/map-check.png
+npm run vendor          # rebuild the inlined d3-force bundle
+npm run boundaries      # rebuild data/boundaries-*.json from source
+npm run arcgis:selftest # the ArcGIS core + the toolbox, without ArcGIS
+npm run package:arcgis  # dist/arcgis-pro/ + dist/FlowMap-arcgis-pro.zip
+npm run serve           # static server on :8000
 ```
 
-The test suite loads the built page in Node with a stubbed DOM, canvas, d3 and
-image loader, then drives it: it clicks the controls, fires tile loads and
-failures by hand, and checks the numbers against the raw dataset. That is how the
-provider fallback and the limit toggles are verified without a browser — and how
-the geometry is checked, by testing every district point against its own polygon.
+`npm run verify:exports` also reads the exported files back with **pyarrow**,
+**geopandas**, **pyshp** and **Pillow** (`pip install pyarrow pyshp pillow
+geopandas`), which is how the writers are kept honest — it is what caught the
+unclosed polygon rings and the DBF field-type bug.
 
-CI (`.github/workflows/ci.yml`) runs formatting, `build --check`, the tests and
-the render on every push.
+The test suite loads the built page in Node with a stubbed DOM, canvas, image
+loader and Blob/URL, then drives it: it loads tables through the real loader code,
+clicks the controls, fires tile loads and failures by hand, and inspects the
+exported bytes. Nothing is injected that the page does not carry itself — a
+stubbed library is how a missing `d3` once reached a live site, so the tests now
+load the page exactly as a browser would, then tick the layout themselves.
+
+The ArcGIS toolbox is checked the same way: `test/arcgis.test.mjs` runs the Python
+core, drives `FlowMap.pyt` through a stand-in for arcpy, and loads the page the
+toolbox wrote in the same browser harness, comparing it number for number with
+the dataset the toolbox reported. CI runs formatting, `build --check`, the tests,
+the render, the export round trip and the ArcGIS packaging.
 
 ## Data
 
 Source: IOM DTM Rapid Displacement Tracking, district level. Households are
-counted from assessments and added up from 4 January to the chosen date, so a
-family assessed twice counts twice — which is why the totals here are movements
-recorded, not a snapshot of people displaced. See `data/README.md` for the exact
-payloads, their licences and the rebuild procedure.
+counted from assessments and summed from 4 January to the chosen date, so a family
+assessed twice counts twice — these are movements recorded, not a snapshot of
+people displaced. See `data/README.md` for the payloads, their licences and the
+rebuild procedure.
 
 ## Licence
 
-MIT for the code (see `LICENSE`). The data keeps the licence of its source:
-Natural Earth is public domain, DIVA-GIS boundaries are free for non-commercial
-use, and the displacement figures belong to IOM DTM. The basemaps belong to their
-providers and carry their own attribution, which the app prints on the map.
+MIT for the code (see `LICENSE`). The example data keeps the licence of its
+source: Natural Earth is public domain, DIVA-GIS boundaries are free for
+non-commercial use, and the displacement figures belong to IOM DTM. Basemaps
+belong to their providers and carry their own attribution, printed on the map.

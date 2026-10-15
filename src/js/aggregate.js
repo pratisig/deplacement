@@ -1,5 +1,5 @@
-/* Aggregation: fold the routes up to the selected day into per-district
-   arrivals, departures, internal moves and the route list being drawn. */
+/* Aggregation: fold the flows up to the selected day into per-place arrivals,
+   departures, internal moves and the list of routes being drawn. */
 let links = [],
   act = [],
   topIds = [],
@@ -39,10 +39,7 @@ function rebuild() {
       n.seeded = true;
     }
     n.t = n.inn + n.out + n.within;
-    n.r =
-      mode === 'map'
-        ? Math.min(15, 1.8 + Math.sqrt(n.t) * 0.13)
-        : Math.min(24, 2 + Math.sqrt(n.t) * 0.23);
+    // the radius follows `blend` and is set in the draw pass
     const mv = n.inn + n.out;
     n.net = n.inn - n.out;
     n.role = mv === 0 || Math.abs(n.net) < 0.1 * mv ? 2 : n.net > 0 ? 0 : 1;
@@ -80,13 +77,41 @@ function rebuild() {
   $('#stats').innerHTML =
     '<b>' +
     fmt(totalHH) +
-    '</b> households · <b>' +
+    '</b> ' +
+    LBL.unit +
+    ' · <b>' +
     fmt(act.length) +
-    '</b> districts · <b>' +
+    '</b> ' +
+    plural(LBL.node) +
+    ' · <b>' +
     fmt(links.length) +
     '</b> routes';
   $('#dt').textContent = fd(upTo);
   table();
+}
+const IRREGULAR = {
+  person: 'people',
+  child: 'children',
+  man: 'men',
+  woman: 'women',
+  city: 'cities',
+  country: 'countries',
+  family: 'families',
+  locality: 'localities',
+  municipality: 'municipalities',
+  community: 'communities',
+};
+/* Words that are already plural, or pluralise differently, so the stats line
+   reads right whatever the loaded dataset calls its places. */
+const ALREADY_PLURAL = new Set(['people', 'children', 'men', 'women', 'staff', 'police', 'data']);
+function plural(word) {
+  const w = String(word || 'item');
+  const k = w.toLowerCase();
+  if (ALREADY_PLURAL.has(k)) return w;
+  if (IRREGULAR[k]) return IRREGULAR[k];
+  if (/s$/.test(w)) return w;
+  if (/[^aeiou]y$/.test(w)) return w.slice(0, -1) + 'ies';
+  return w + 's';
 }
 function table() {
   const rows = act

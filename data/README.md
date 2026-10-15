@@ -1,10 +1,15 @@
 # Data
 
+This directory holds the **built-in example**: a flow table plus two boundary
+layers. The page at runtime builds exactly the same structure from any table a
+user loads (`src/js/sources.js`), so nothing here is special-cased.
+
 | File | What it is | Source | Licence |
 | --- | --- | --- | --- |
 | `displacement.json` | 227 districts with their centre point and governorate, and 2 832 routes (day, origin, destination, households) | IOM DTM Rapid Displacement Tracking, district level, 4 Jan – 11 Oct 2026 | IOM DTM terms of use |
 | `boundaries-adm1.json` | 21 governorate outlines (`p` = rings, `c` = label point) | Natural Earth 1:10m admin-1 states and provinces | public domain |
 | `boundaries-adm2.json` | district outlines, keyed by the district name used in the dataset | DIVA-GIS Yemen districts, via the [topography](https://github.com/tanaynistala/topography) TopoJSON mirror | DIVA-GIS: free for non-commercial use |
+| `example.meta.json` | title, unit, labels and first date of the example | — | — |
 
 Format notes:
 

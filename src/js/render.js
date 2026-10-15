@@ -1,12 +1,16 @@
-/* Drawing: one function paints whatever the current state is — basemap,
-   limits, routes, travellers, districts and labels. */
+/* Drawing: one function paints the whole state — basemap, limits, flows,
+   travellers, places and labels. The map fades out as the network takes over,
+   so the two layouts are one continuous view rather than two screens. */
+
 function draw(t) {
+  viewPositions();
+  const b = blend;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
-  if (mode === 'map') {
-    drawBasemap();
-    drawLimits();
+  if (b < 0.98) {
+    drawBasemap(1 - b);
+    drawLimits(1 - b);
   }
   const hv = hover;
   let nb = null;
@@ -23,19 +27,20 @@ function draw(t) {
   for (const l of links) {
     const s = l.source,
       e = l.target,
-      dx = e.x - s.x,
-      dy = e.y - s.y;
-    l.cx = (s.x + e.x) / 2 - dy * 0.18;
-    l.cy = (s.y + e.y) / 2 + dx * 0.18;
+      dx = e.rx - s.rx,
+      dy = e.ry - s.ry;
+    // straighter lines as the network takes over, so routes stay readable
+    l.cx = (s.rx + e.rx) / 2 - dy * 0.18 * (1 - b * 0.55);
+    l.cy = (s.ry + e.ry) / 2 + dx * 0.18 * (1 - b * 0.55);
     const hl = hv && (s === hv || e === hv);
     let a = Math.min(0.55, 0.09 + Math.log(1 + l.w) * 0.08);
     if (hv) a = hl ? Math.min(0.95, a * 3 + 0.3) : a * 0.18;
     ctx.globalAlpha = a;
     ctx.lineWidth = Math.min(3.2, 0.4 + Math.sqrt(l.w) * 0.1) * (hl ? 1.6 : 1);
-    ctx.setLineDash(l.same ? [2, 3] : []);
+    ctx.setLineDash(l.same && b < 0.98 ? [2, 3] : []);
     ctx.beginPath();
-    ctx.moveTo(s.x, s.y);
-    ctx.quadraticCurveTo(l.cx, l.cy, e.x, e.y);
+    ctx.moveTo(s.rx, s.ry);
+    ctx.quadraticCurveTo(l.cx, l.cy, e.rx, e.ry);
     ctx.stroke();
   }
   ctx.setLineDash([]);
@@ -50,8 +55,8 @@ function draw(t) {
       for (const p of l.ph) {
         const u = (p + t * 0.00012 * l.sp) % 1,
           v = 1 - u;
-        const x = v * v * s.x + 2 * v * u * l.cx + u * u * e.x,
-          y = v * v * s.y + 2 * v * u * l.cy + u * u * e.y;
+        const x = v * v * s.rx + 2 * v * u * l.cx + u * u * e.rx,
+          y = v * v * s.ry + 2 * v * u * l.cy + u * u * e.ry;
         ctx.beginPath();
         ctx.arc(x, y, hl ? 2 : 1.4, 0, 6.2832);
         ctx.fill();
@@ -63,14 +68,14 @@ function draw(t) {
     ctx.globalAlpha = dim ? 0.18 : 0.92;
     ctx.fillStyle = C.node[n.role];
     ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r, 0, 6.2832);
+    ctx.arc(n.rx, n.ry, n.r, 0, 6.2832);
     ctx.fill();
     if (n.within > 0) {
       ctx.globalAlpha = dim ? 0.12 : 0.55;
       ctx.strokeStyle = C.node[n.role];
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r + 3.2, 0, 6.2832);
+      ctx.arc(n.rx, n.ry, n.r + 3.2, 0, 6.2832);
       ctx.stroke();
     }
   }
@@ -79,7 +84,7 @@ function draw(t) {
     ctx.strokeStyle = C.ink;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.arc(hv.x, hv.y, hv.r + 5, 0, 6.2832);
+    ctx.arc(hv.rx, hv.ry, hv.r + 5, 0, 6.2832);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
@@ -91,18 +96,27 @@ function draw(t) {
     const n = N[i];
     if (!n.active) continue;
     const w = ctx.measureText(n.name).width,
-      right = n.x + n.r + 5 + w < W - 4;
-    const x = right ? n.x + n.r + 5 : n.x - n.r - 5 - w;
-    if (placed.some(p => x < p[2] && x + w > p[0] && Math.abs(n.y - p[1]) < 13)) continue;
-    placed.push([x, n.y, x + w]);
+      right = n.rx + n.r + 5 + w < W - 4;
+    const x = right ? n.rx + n.r + 5 : n.rx - n.r - 5 - w;
+    if (placed.some(p => x < p[2] && x + w > p[0] && Math.abs(n.ry - p[1]) < 13)) continue;
+    placed.push([x, n.ry, x + w]);
     ctx.lineWidth = 3;
     ctx.strokeStyle = C.bg;
-    ctx.strokeText(n.name, x, n.y);
+    ctx.strokeText(n.name, x, n.ry);
     ctx.fillStyle = C.ink;
-    ctx.fillText(n.name, x, n.y);
+    ctx.fillText(n.name, x, n.ry);
   }
-  if (mode === 'map' && curProv()) {
-    ctx.globalAlpha = 0.55;
+  if (b > 0.65) {
+    // explain the abstract view once the map has gone
+    ctx.globalAlpha = 0.5;
+    ctx.font = '10px "IBM Plex Mono",ui-monospace,monospace';
+    ctx.fillStyle = C.ring;
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Network layout — distance has no geographic meaning', 6, H - 6);
+    ctx.globalAlpha = 1;
+  }
+  if (b < 0.98 && curProv()) {
+    ctx.globalAlpha = 0.55 * (1 - b);
     ctx.font = '9px "IBM Plex Mono",ui-monospace,monospace';
     ctx.fillStyle = '#c8d4de';
     ctx.textBaseline = 'bottom';
@@ -111,6 +125,13 @@ function draw(t) {
   }
 }
 function loop(t) {
-  draw(t);
+  // a throw here would otherwise repeat sixty times a second and leave the
+  // canvas blank with no explanation
+  try {
+    draw(t);
+  } catch (err) {
+    if (typeof showFailure === 'function') showFailure(err);
+    return;
+  }
   requestAnimationFrame(loop);
 }

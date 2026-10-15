@@ -13,17 +13,19 @@ import { dirname, join } from 'node:path';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const read = p => readFileSync(join(root, p), 'utf8');
-const min = obj => JSON.stringify(obj); // data has no functions in it
+const min = obj => JSON.stringify(obj); // the payloads hold plain data
 
-/* Data modules are loaded in order: later ones use the earlier ones. */
-const DATA = [
-  ['displacement.json', 'D', 'IOM DTM Rapid Displacement Tracking, Yemen districts.'],
-  ['boundaries-adm1.json', 'ADM1', 'Governorate limits (geoBoundaries gbOpen ADM1 + label point).'],
-  ['boundaries-adm2.json', 'ADM2', 'District limits (Natural Earth ADM2), keyed by district name.'],
-];
+/* The layout library, bundled into one file by tools/vendor-d3.mjs. The page
+   must carry its own: it is opened from a file:// URL and offline, so a CDN
+   script would be both a network dependency and a blank page when it fails. */
+const VENDOR = 'vendor/d3-force.js';
 
+/* Loaded in order: later modules use the earlier ones. */
 const SCRIPTS = [
   'core.js',
+  'geo.js',
+  'table.js',
+  'sources.js',
   'dataset.js',
   'projection.js',
   'tiles.js',
@@ -31,14 +33,31 @@ const SCRIPTS = [
   'aggregate.js',
   'simulate.js',
   'render.js',
+  'gif.js',
+  'shp.js',
+  'parquet.js',
+  'export.js',
   'ui.js',
 ];
 
-const dataBlocks = DATA.map(
-  ([file, name, note]) => `/* ${note} */\nconst ${name}=${min(JSON.parse(read(`data/${file}`)))};`,
-).join('\n\n');
+const payload = JSON.parse(read('data/displacement.json'));
+const example = {
+  meta: JSON.parse(read('data/example.meta.json')),
+  nodes: payload.nodes,
+  edges: payload.edges,
+  maxDay: payload.maxDay,
+  total: payload.total,
+  admin1: JSON.parse(read('data/boundaries-adm1.json')),
+  admin2: JSON.parse(read('data/boundaries-adm2.json')),
+};
 
-const appBlocks = SCRIPTS.map(f => read(`src/js/${f}`).trim()).join('\n\n');
+const dataBlocks = `/* The built-in example. Everything below works from this shape, and
+   src/js/sources.js builds the same shape from a table the user loads. */
+const EXAMPLE = ${min(example)};`;
+
+const appBlocks = [read(VENDOR).trim(), ...SCRIPTS.map(f => read(`src/js/${f}`).trim())].join(
+  '\n\n',
+);
 
 /* Indent nothing: the app code is written at column 0 and stays readable in
    devtools, which matters more here than a few bytes of whitespace. */
@@ -58,5 +77,5 @@ if (process.argv.includes('--check')) {
 } else {
   writeFileSync(join(root, 'index.html'), html);
   const kb = (Buffer.byteLength(html) / 1024).toFixed(0);
-  console.log(`wrote index.html (${kb} kB: ${DATA.length} data blocks, ${SCRIPTS.length} modules)`);
+  console.log(`wrote index.html (${kb} kB: example data + ${SCRIPTS.length} modules)`);
 }

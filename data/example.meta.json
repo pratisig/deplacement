@@ -1,0 +1,9 @@
+{
+  "title": "Yemen displacement network",
+  "subtitle": "Each dot is a district. Each line is a route people took between two districts, from 4 January to 11 October 2026, with small lights travelling from where they left to where they arrived.",
+  "unit": "households",
+  "nodeLabel": "district",
+  "groupLabel": "governorate",
+  "source": "IOM DTM Rapid Displacement Tracking, district level. Households are counted from assessments and added up from 4 January to the date chosen, so a family assessed twice counts twice",
+  "dateStart": "2026-01-04"
+}
