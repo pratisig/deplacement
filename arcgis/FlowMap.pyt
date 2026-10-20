@@ -440,16 +440,18 @@ class BuildFlowMapPage(object):
                 props["category"] = category
             param = arcpy.Parameter(**props)
             if kind == "COLUMN":
-                # A value list is a real drop-down in the pane, and it is
-                # filled by this tool from the columns it reads itself. Pro's
-                # own field control is not used: it stays empty for a layer
-                # added from a JSON file, which is how a dialog ends up with
-                # six boxes to type in.
-                try:
-                    param.filter.type = "ValueList"
-                    param.filter.list = [""]
-                except Exception:
-                    pass
+                # A value list is a real drop-down in the pane, and this tool
+                # fills it from the columns it reads itself. Pro's own field
+                # control is not used: it stays empty for a layer added from a
+                # JSON file, which is how a dialog ends up with six boxes to
+                # type in.
+                #
+                # The list goes in first and the type second, on purpose: Pro
+                # resets a filter to "Any" when the list is replaced while the
+                # parameter has no items, and a column parameter whose filter
+                # is "Any" is drawn as a text box - which is exactly what a
+                # pane full of empty boxes is.
+                self._force_value_list(param, [""])
             params.append(param)
 
         by_name = {p.name: p for p in params}
@@ -689,6 +691,46 @@ class BuildFlowMapPage(object):
             dataset = by_name.get(source)
             dataset = dataset.value if dataset is not None else None
             self._sync_columns(param, self._columns_of(dataset) if dataset else [])
+        # the last word: a column parameter is a drop-down, on every pass
+        for name in COLUMN_SOURCES:
+            param = by_name.get(name)
+            if param is not None:
+                self._force_value_list(param)
+
+    @staticmethod
+    def _force_value_list(param, options=None):
+        """Make a column parameter a drop-down, and keep it one.
+
+        Setting the list and setting the type are two different things, and
+        Pro can put the type back to "Any" when the list is replaced - a
+        parameter whose filter is "Any" is drawn as a text box, however good
+        the list behind it is. So the type is asserted after every list change,
+        and verified rather than assumed.
+        """
+        if options is not None:
+            try:
+                param.filter.list = list(options)
+            except Exception:
+                pass
+        for _attempt in range(2):
+            try:
+                if str(getattr(param.filter, "type", "")) != "ValueList":
+                    param.filter.type = "ValueList"
+            except Exception:
+                pass
+            try:
+                if str(getattr(param.filter, "type", "")) == "ValueList":
+                    return True
+            except Exception:
+                return False
+            # some builds only accept the type once the list has an item; an
+            # empty entry is a legitimate item - it clears the field
+            try:
+                if not list(getattr(param.filter, "list", None) or []):
+                    param.filter.list = [""]
+            except Exception:
+                pass
+        return False
 
     def _sync_columns(self, param, columns):
         """Fill one column drop-down from the dataset it belongs to.
@@ -701,10 +743,8 @@ class BuildFlowMapPage(object):
         if param is None:
             return
         options = [""] + [name for name in columns]
-        try:
-            param.filter.list = options
-        except Exception:
-            pass
+        # list, then type: a replaced list can reset the type to "Any"
+        self._force_value_list(param, options)
         if not columns:
             try:
                 param.enabled = False
@@ -788,7 +828,16 @@ class BuildFlowMapPage(object):
             if title is not None and not title.altered and not title.value:
                 title.value = self._title_from(flows.value)
 
-        # 3. the value column decides what the unit is called, when unset
+        # 3. one name column names both ends of a row, unless both were chosen
+        o_name = by_name.get("o_name")
+        d_name = by_name.get("d_name")
+        if o_name is not None and d_name is not None and not o_name.altered and not d_name.altered:
+            if self._text(d_name) and not self._text(o_name):
+                o_name.value = self._text(d_name)
+            elif self._text(o_name) and not self._text(d_name):
+                d_name.value = self._text(o_name)
+
+        # 4. the value column decides what the unit is called, when unset
         unit = by_name.get("unit")
         value_column = self._text(by_name.get("value")) if by_name.get("value") else ""
         if unit is not None and not unit.altered and not self._text(unit) and value_column and CORE:
@@ -797,7 +846,7 @@ class BuildFlowMapPage(object):
             except Exception:
                 pass
 
-        # 4. a point layer carries its own coordinates
+        # 5. a point layer carries its own coordinates
         if self._is_points(flows.value):
             for lon, lat in (("o_lon", "o_lat"), ("d_lon", "d_lat")):
                 for name in (lon, lat):
@@ -808,7 +857,7 @@ class BuildFlowMapPage(object):
                         except Exception:
                             pass
 
-        # 5. what the current choices do to the data, as the user changes them
+        # 6. what the current choices do to the data, as the user changes them
         mapping = self._mapping_from(by_name)
         try:
             findings = CORE.diagnose_mapping(sample, mapping)

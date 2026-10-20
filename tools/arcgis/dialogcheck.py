@@ -203,6 +203,43 @@ def check_shape(module, label, dataset, expected, disabled=()):
     return by_name
 
 
+def check_type_survives(module):
+    """A replaced list must not leave a column parameter as a text box.
+
+    Pro keeps a filter's type and its list apart, and puts the type back to
+    "Any" when the list is replaced while it is empty. A parameter whose type
+    is "Any" is a text box - which is what the pane showed on the real run,
+    with the values filled in and no drop-down arrow in sight. So this is
+    checked directly: break the type, run a pass, and demand it back.
+    """
+    print("\nThe filter type survives a list change")
+    tool, params, by_name = fresh_tool(module)
+    by_name["flows"].value = "/project/synthese"
+    by_name["flows"].altered = True
+    tool.updateParameters(params)
+    for name in FLOW_COLUMNS:
+        param = by_name[name]
+        param.filter.type = "Any"  # what Pro does to a filter it rebuilds
+        tool.updateParameters(params)
+        check(
+            "%s is a value list again after the type was reset" % name,
+            str(param.filter.type) == "ValueList",
+            param.filter.type,
+        )
+        param.filter.list = []  # and what an empty rebuild leaves behind
+        tool.updateParameters(params)
+        check(
+            "%s keeps its columns after an empty rebuild" % name,
+            param.filter.list == [""] + SYNTHESE and str(param.filter.type) == "ValueList",
+            (param.filter.list, param.filter.type),
+        )
+    check(
+        "the empty entry is still first, so a column can be cleared",
+        by_name["value"].filter.list[0] == "",
+        by_name["value"].filter.list[:1],
+    )
+
+
 def check_follows(module):
     """Changing the dataset must change the list, and drop what is gone."""
     print("\nThe list follows the dataset")
@@ -344,6 +381,7 @@ def run():
     finally:
         stub.env.workspace = previous
 
+    check_type_survives(module)
     check_follows(module)
     check_reopen(module)
     check_places_columns(module)

@@ -21,8 +21,36 @@ class ExecuteError(Exception):
 
 
 class _Filter(object):
+    """A parameter filter, as Pro behaves rather than as the docs describe.
+
+    Pro keeps the *type* and the *list* separately, and puts the type back to
+    "Any" when the list is replaced while it is empty; a parameter whose type
+    is "Any" is drawn as a text box however good its list is. That behaviour is
+    the one that turned six drop-downs into six empty boxes, so it is emulated
+    here rather than smoothed over.
+    """
+
     def __init__(self):
-        self.list = []
+        self._list = []
+        self._type = "Any"
+
+    @property
+    def list(self):
+        return self._list
+
+    @list.setter
+    def list(self, items):
+        self._list = list(items or [])
+        if not self._list:
+            self._type = "Any"
+
+    @property
+    def type(self):
+        return self._type
+
+    @type.setter
+    def type(self, value):
+        self._type = "Any" if (str(value) == "ValueList" and not self._list) else value
 
 
 class Parameter(object):

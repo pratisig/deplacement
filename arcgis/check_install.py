@@ -157,13 +157,19 @@ def layout(parameters, by_name=None):
         datatype = getattr(param, "datatype", None) if param is not None else kind
         if isinstance(datatype, list):
             datatype = datatype[0]
+        control = ""
+        if kind == "COLUMN":
+            filter_type = str(getattr(getattr(param, "filter", None), "type", "") or "")
+            count = len(list(getattr(getattr(param, "filter", None), "list", None) or []))
+            control = ("drop-down" if filter_type == "ValueList" else "TEXT BOX") + " (%d)" % count
         print(
-            "    %-18s %-28s %-10s %-8s%s"
+            "    %-18s %-28s %-10s %-8s %-14s%s"
             % (
                 name,
                 label[:28],
                 str(datatype)[:10],
                 "required" if required else "optional",
+                control,
                 (" [%s]" % category) if category else "",
             )
         )
@@ -187,6 +193,16 @@ def check_dialog(stub):
     check(
         "no required parameter is hidden in a category",
         all(not param.category for param in parameters if param.parameterType == "Required"),
+    )
+    text_boxes = [
+        name
+        for name in columns
+        if str(getattr(by_name[name].filter, "type", "")) != "ValueList"
+    ]
+    check(
+        "every column parameter's filter type is ValueList (a text box means Pro ignored it)",
+        not text_boxes,
+        ", ".join(text_boxes),
     )
     check_help(module.PARAMETERS)
     return module, tool, parameters, by_name

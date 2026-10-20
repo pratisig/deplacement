@@ -68,7 +68,12 @@ label, source note. Unit and labels are deduced when left empty.
 dataset JSON.
 
 **Every column parameter is a drop-down of the table's own columns.** Not a
-text box, not Pro's field control. The list is filled when you choose the table,
+text box, not Pro's field control. A filter's *type* and its *list* are two
+different things in Pro, and it puts the type back to "Any" when the list is
+replaced while empty — a parameter whose type is "Any" is drawn as a text box
+however good its list is. So the type is re-asserted after every list change,
+and verified: `check_install.py` prints `drop-down (8)` or `TEXT BOX` for each
+column parameter, in your copy of Pro. The list is filled when you choose the table,
 refilled when you change it, and filled again when the pane is reopened on the
 values of the previous run. The tool reads the columns itself — `ListFields`, then `Describe().fields`, then a cursor, then
 the JSON file behind a layer added from JSON or GeoJSON — so a layer Pro's own
@@ -255,12 +260,13 @@ tested.
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
   enabled, `.lyrx`), and every failure path;
-- checks the pane itself (`tools/arcgis/dialogcheck.py`, 420 checks): on a
+- checks the pane itself (`tools/arcgis/dialogcheck.py`, 437 checks): on a
   feature table, a standalone table, a point layer, a shapefile and a layer
   added from JSON, every column parameter is a value list, holds the columns
   of the dataset chosen above it, follows the dataset when it changes, drops a
   column the new table lacks, fills itself when the dialog is reopened
-  (`updateMessages` alone), and accepts every item clicked in it;
+  (`updateMessages` alone), keeps its type as a value list when Pro resets it
+  or rebuilds it from an empty list, and accepts every item clicked in it;
 - checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
   23 checks) and that the help XML matches the toolbox
   (`python3 tools/arcgis/build-help.py --check`);
