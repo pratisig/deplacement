@@ -23,13 +23,13 @@
         <dialogReference>The name of the HTML file, written inside the output folder. Leave it empty for index.html. A name without .html gets it added.</dialogReference>
         <pythonReference>The name of the HTML file, written inside the output folder. Leave it empty for index.html. A name without .html gets it added.</pythonReference>
       </param>
-      <param name="o_name" displayname="Origin name field" datatype="GPString" direction="Input" expression="o_name" parameterType="Optional">
-        <dialogReference>The column holding the place a flow starts from. It is not needed when the table has longitude/latitude columns, or when a places layer or an outlines layer can locate the names.</dialogReference>
-        <pythonReference>The column holding the place a flow starts from. It is not needed when the table has longitude/latitude columns, or when a places layer or an outlines layer can locate the names.</pythonReference>
+      <param name="o_name" displayname="Place name field (origin)" datatype="GPString" direction="Input" expression="o_name" parameterType="Optional">
+        <dialogReference>The column holding the place a flow starts from. When one column names the village and the origins and destinations are told apart by their coordinates, choose that column here AND in the destination field: the page then keeps both ends (two positions, one name). Not needed at all when a places layer or an outlines layer can locate the names.</dialogReference>
+        <pythonReference>The column holding the place a flow starts from. When one column names the village and the origins and destinations are told apart by their coordinates, choose that column here AND in the destination field: the page then keeps both ends (two positions, one name). Not needed at all when a places layer or an outlines layer can locate the names.</pythonReference>
       </param>
-      <param name="d_name" displayname="Destination name field" datatype="GPString" direction="Input" expression="d_name" parameterType="Optional">
-        <dialogReference>The column holding the place a flow goes to. Leave it empty when each row describes one place: the origin column is then used for both ends and the page counts the rows as records in that place.</dialogReference>
-        <pythonReference>The column holding the place a flow goes to. Leave it empty when each row describes one place: the origin column is then used for both ends and the page counts the rows as records in that place.</pythonReference>
+      <param name="d_name" displayname="Place name field (destination)" datatype="GPString" direction="Input" expression="d_name" parameterType="Optional">
+        <dialogReference>The column holding the place a flow goes to. Empty: the origin column is used for both ends, and each row counts as a record inside that place. When the origins and destinations are separated by their coordinates rather than by their names, put the same column here as in the origin field - the two positions stay two dots, so the flow is drawn instead of collapsing.</dialogReference>
+        <pythonReference>The column holding the place a flow goes to. Empty: the origin column is used for both ends, and each row counts as a record inside that place. When the origins and destinations are separated by their coordinates rather than by their names, put the same column here as in the origin field - the two positions stay two dots, so the flow is drawn instead of collapsing.</pythonReference>
       </param>
       <param name="value" displayname="Value field (empty counts 1)" datatype="GPString" direction="Input" expression="value" parameterType="Optional">
         <dialogReference>The column holding the quantity to draw - households, people, cases, MILDA, tonnes. It must contain numbers: a column of text codes is refused by name. Leave it empty and every row counts 1.</dialogReference>

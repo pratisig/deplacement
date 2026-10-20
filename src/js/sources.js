@@ -176,6 +176,14 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
   // ---- places --------------------------------------------------------------
   const nodes = [];
   const index = new Map();
+  const split = new Set(); // names that happen to sit at two positions
+  // One name, one dot - unless the table puts that name at two places. A row
+  // naming the same village at both ends but giving two coordinate pairs is a
+  // movement, not a record inside one place; a table of records per village
+  // repeats the name at the same point and must stay one dot. The dot is
+  // therefore identified by name *and* position, so a set of coordinates is
+  // never silently collapsed into a self-loop the page cannot draw.
+  const SAME_PLACE = 1e-4; // about 11 metres
   const placeOf = (name, group, lon, lat, side) => {
     const label =
       name || (lon !== null && lat !== null ? lon.toFixed(3) + ', ' + lat.toFixed(3) : '');
@@ -190,14 +198,29 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
       }
     }
     if (x === null || y === null) return null;
-    const key = keyName(label) + '|' + keyName(group);
-    let i = index.get(key);
-    if (i === undefined) {
-      i = nodes.length;
-      index.set(key, i);
-      nodes.push([label, group || '', +x.toFixed(5), +y.toFixed(5)]);
+    const base = keyName(label) + '|' + keyName(group);
+    const rx = +x.toFixed(5),
+      ry = +y.toFixed(5);
+    let i = index.get(base);
+    if (i !== undefined) {
+      const here = nodes[i];
+      if (Math.abs(here[2] - rx) <= SAME_PLACE && Math.abs(here[3] - ry) <= SAME_PLACE) {
+        return { i, key: base, label, side };
+      }
+      const at = base + '|' + rx + ',' + ry;
+      i = index.get(at);
+      if (i === undefined) {
+        split.add(label);
+        i = nodes.length;
+        index.set(at, i);
+        nodes.push([label, group || '', rx, ry]);
+      }
+      return { i, key: at, label, side };
     }
-    return { i, key, label, side };
+    i = nodes.length;
+    index.set(base, i);
+    nodes.push([label, group || '', rx, ry]);
+    return { i, key: base, label, side };
   };
 
   const edges = [];
@@ -233,6 +256,15 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
       ? 'Check that the names in the table match the names in the boundary file.'
       : 'Add longitude/latitude columns, or load a boundary file so places can be found by name.';
     throw new Error('No usable rows: no place could be placed on the map. ' + hint);
+  }
+  if (split.size) {
+    warnings.push(
+      split.size +
+        ' place name(s) appear at more than one position (' +
+        [...split].slice(0, 4).join(', ') +
+        (split.size > 4 ? '…' : '') +
+        '); each position is kept as its own dot so the flows keep both ends.',
+    );
   }
   if (skipped) {
     warnings.push(

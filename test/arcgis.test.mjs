@@ -217,3 +217,105 @@ test(
     assert.equal(tally[1], tally[2]);
   },
 );
+
+test('one name at two positions keeps both ends of the flow', { skip: !python }, () => {
+  const spec = {
+    rows: [
+      {
+        Village: 'Touba',
+        Menages: 120,
+        Lon_rep: 9.09,
+        Lat_rep: 12.88,
+        Lon_dept: 9.08,
+        Lat_dept: 12.87,
+      },
+      {
+        Village: 'Mbacke',
+        Menages: 80,
+        Lon_rep: 9.03,
+        Lat_rep: 12.9,
+        Lon_dept: 9.05,
+        Lat_dept: 12.89,
+      },
+    ],
+    // one name column for both ends, two coordinate pairs: a movement
+    mapping: {
+      oName: 'Village',
+      dName: 'Village',
+      value: 'Menages',
+      oLon: 'Lon_rep',
+      oLat: 'Lat_rep',
+      dLon: 'Lon_dept',
+      dLat: 'Lat_dept',
+    },
+    meta: { title: 'Synthese villages', unit: 'households' },
+  };
+  const specPath = join(work, 'villages-spec.json');
+  writeFileSync(specPath, JSON.stringify(spec));
+  const out = join(work, 'villages-page.html');
+  const json = join(work, 'villages.json');
+  ran(
+    once('villages', [
+      'arcgis/flowmap_core.py',
+      'build',
+      '--input',
+      specPath,
+      '--out',
+      out,
+      '--json',
+      json,
+    ]),
+    'flowmap_core build',
+  );
+  const dataset = JSON.parse(readFileSync(json, 'utf8'));
+  const loops = dataset.edges.filter(edge => edge[1] === edge[2]).length;
+  assert.equal(loops, 0, 'a movement must not collapse into a self-loop');
+  assert.equal(dataset.edges.length, 2, 'both flows kept');
+  assert.equal(dataset.nodes.length, 4, 'two positions per village name');
+
+  // and the page really draws them: the number of links the drawing pass makes
+  const page = loadPage({ html: readFileSync(out, 'utf8') });
+  assert.equal(page.T.getLinks().length, 2, 'the page has two flows to draw');
+  assert.equal(
+    page.T.getLinks().filter(link => link.source === link.target).length,
+    0,
+    'none of them is a curve from a point to itself',
+  );
+});
+
+test('a place record repeated at the same point stays one dot', { skip: !python }, () => {
+  const spec = {
+    rows: [
+      { Village: 'Touba', Menages: 10, Lon: 9.09, Lat: 12.88 },
+      { Village: 'Touba', Menages: 20, Lon: 9.09, Lat: 12.88 },
+      { Village: 'Mbacke', Menages: 30, Lon: 9.03, Lat: 12.9 },
+    ],
+    mapping: { oName: 'Village', value: 'Menages', oLon: 'Lon', oLat: 'Lat' },
+    meta: { title: 'Records per village' },
+  };
+  const specPath = join(work, 'records-spec.json');
+  writeFileSync(specPath, JSON.stringify(spec));
+  const out = join(work, 'records-page.html');
+  const json = join(work, 'records.json');
+  ran(
+    once('records', [
+      'arcgis/flowmap_core.py',
+      'build',
+      '--input',
+      specPath,
+      '--out',
+      out,
+      '--json',
+      json,
+    ]),
+    'flowmap_core build',
+  );
+  const dataset = JSON.parse(readFileSync(json, 'utf8'));
+  assert.equal(dataset.nodes.length, 2, 'one dot per place, not per row');
+  assert.equal(dataset.edges.length, 3, 'every row is still counted');
+  assert.equal(
+    dataset.edges.filter(edge => edge[1] === edge[2]).length,
+    3,
+    'a record inside a place is a self-loop, drawn as a loop',
+  );
+});

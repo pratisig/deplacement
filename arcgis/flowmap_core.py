@@ -1012,6 +1012,8 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
     # of the row — is kept, so a city does not split into two dots when two
     # rows call it by two regions.
     group_of_name = {}
+    # names that ended up at more than one position, for the warning below
+    split = set()
 
     def resolve_group(name, column_group, inherit_from=""):
         key = key_name(name)
@@ -1020,6 +1022,14 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
         if key not in group_of_name:
             group_of_name[key] = column_group or index.group_of(name) or inherit_from or ""
         return group_of_name[key]
+
+    # One name, one dot - unless the table puts that name at two places. A row
+    # that leaves the origin and destination names the same but gives them two
+    # coordinate pairs describes a movement, not a record inside one place; and
+    # a table of records per village repeats the name at the same point, which
+    # must stay a single dot. The dot is therefore identified by its name and
+    # its position, so the two cases are told apart instead of being merged.
+    SAME_PLACE = 1e-4  # a ten-thousandth of a degree, about 11 metres
 
     def place_of(name, group, lon, lat):
         label = name or ("%.3f, %.3f" % (lon, lat) if lon is not None and lat is not None else "")
@@ -1031,13 +1041,24 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             if not hit:
                 return None
             x, y = hit
-        key = key_name(label) + "|" + key_name(group)
-        i = node_index.get(key)
-        if i is None:
-            i = len(nodes)
-            node_index[key] = i
-            nodes.append([label, group or "", round(float(x), 5), round(float(y), 5)])
-        return i
+        x, y = round(float(x), 5), round(float(y), 5)
+        base = key_name(label) + "|" + key_name(group)
+        i = node_index.get(base)
+        if i is not None:
+            here = nodes[i]
+            if abs(here[2] - x) <= SAME_PLACE and abs(here[3] - y) <= SAME_PLACE:
+                return i
+            key = base + "|%.5f,%.5f" % (x, y)
+            i = node_index.get(key)
+            if i is not None:
+                return i
+            split.add(label)
+            node_index[key] = len(nodes)
+            nodes.append([label, group or "", x, y])
+            return node_index[key]
+        node_index[base] = len(nodes)
+        nodes.append([label, group or "", x, y])
+        return node_index[base]
 
     # ---- flows ------------------------------------------------------------
     edges = []
@@ -1053,6 +1074,10 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             continue
         o_name = str(get(row, mapping.get("oName")) or "").strip()
         d_name = str(get(row, mapping.get("dName")) or "").strip() or o_name
+        # one name column names both ends: never label a dot with coordinates
+        # when the row does carry a name
+        if not o_name:
+            o_name = d_name
         o_column_group = str(get(row, mapping.get("oGroup")) or "").strip()
         d_column_group = str(get(row, mapping.get("dGroup")) or "").strip()
         o_group = resolve_group(o_name, o_column_group)
@@ -1084,6 +1109,13 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             "No usable rows: no place could be placed on the map. "
             + hint
             + (("\n" + findings) if findings else "")
+        )
+    if split:
+        shown = ", ".join(sorted(split)[:5])
+        warnings.append(
+            "%d place name(s) appear at more than one position (%s%s); each "
+            "position is kept as its own dot so the flows keep both ends."
+            % (len(split), shown, "…" if len(split) > 5 else "")
         )
     if skipped:
         shown = ", ".join(list(dict.fromkeys(missing))[:6])

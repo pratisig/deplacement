@@ -118,7 +118,7 @@ vm.runInContext(
   script +
     ';globalThis.__T={MAP:()=>MAP,mercX,mercY,project,size,B:()=>B,N:()=>N,D:()=>D,EXAMPLE,' +
     'GOVPATH:()=>GOVPATH,DISTPATH:()=>DISTPATH,PROV,STYLE,loadSource,' +
-    'chainOf:s=>STYLE[s].chain};',
+    'chainOf:s=>STYLE[s].chain,rebuild,links:()=>links,getLinks:()=>links,blend:()=>blend};',
   sandbox,
 );
 const T = sandbox.__T;
@@ -181,6 +181,60 @@ for (const { rings } of Object.values(T.GOVPATH())) {
   }
 }
 
+/* --------------------------------------------------------------- the flows
+   The page draws a flow as a curved line from one place to another; a flow
+   from a place to itself is drawn as a small loop beside its dot, because a
+   curve between one point and itself has no length. Both are drawn here with
+   the page's own aggregation (T.getLinks()), so a dataset whose flows have
+   collapsed - the bug that made a page look empty - shows up as zero lines. */
+const links = T.getLinks();
+for (const l of links) {
+  const sx = px(l.source.lon),
+    sy = py(l.source.lat),
+    ex = px(l.target.lon),
+    ey = py(l.target.lat);
+  const w = Math.min(3.2, 0.4 + Math.sqrt(l.w) * 0.1);
+  if (l.source === l.target || (Math.abs(sx - ex) < 0.5 && Math.abs(sy - ey) < 0.5)) {
+    const r = 7 + Math.min(8, Math.sqrt(l.w) * 1.6);
+    for (let a = 0; a < 360; a += 8) {
+      const t0 = (a * Math.PI) / 180,
+        t1 = ((a + 8) * Math.PI) / 180;
+      canvas.line(
+        sx + r * 0.7 + r * Math.cos(t0),
+        sy - r * 0.7 + r * Math.sin(t0),
+        sx + r * 0.7 + r * Math.cos(t1),
+        sy - r * 0.7 + r * Math.sin(t1),
+        [217, 160, 102],
+        Math.min(0.9, 0.3 + Math.sqrt(l.w) * 0.08),
+      );
+    }
+    continue;
+  }
+  const dx = ex - sx,
+    dy = ey - sy;
+  const cx = (sx + ex) / 2 - dy * 0.18,
+    cy = (sy + ey) / 2 + dx * 0.18;
+  const steps = 24;
+  for (let i = 0; i < steps; i++) {
+    const u0 = i / steps,
+      u1 = (i + 1) / steps;
+    const q = u => [
+      (1 - u) * (1 - u) * sx + 2 * (1 - u) * u * cx + u * u * ex,
+      (1 - u) * (1 - u) * sy + 2 * (1 - u) * u * cy + u * u * ey,
+    ];
+    const a = q(u0),
+      b = q(u1);
+    canvas.line(
+      a[0],
+      a[1],
+      b[0],
+      b[1],
+      [217, 160, 102],
+      Math.min(0.85, 0.25 + Math.sqrt(l.w) * 0.09),
+    );
+  }
+}
+
 /* ------------------------------------------------------- points and labels */
 let placed = 0;
 for (const n of T.N()) {
@@ -198,6 +252,7 @@ const report = {
   districts: Object.keys(T.DISTPATH()).length,
   governorates: Object.keys(T.GOVPATH()).length,
   points: placed,
+  flows: links.length,
   frame: {
     x: [Math.min(...T.N().map(n => px(n.lon))), Math.max(...T.N().map(n => px(n.lon)))].map(
       Math.round,

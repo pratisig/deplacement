@@ -39,8 +39,16 @@ function draw(t) {
     ctx.lineWidth = Math.min(3.2, 0.4 + Math.sqrt(l.w) * 0.1) * (hl ? 1.6 : 1);
     ctx.setLineDash(l.same && b < 0.98 ? [2, 3] : []);
     ctx.beginPath();
-    ctx.moveTo(s.rx, s.ry);
-    ctx.quadraticCurveTo(l.cx, l.cy, e.rx, e.ry);
+    if (s === e) {
+      // A flow from a place to itself has no length: a straight or quadratic
+      // path between one point and itself is invisible, which reads as "the
+      // flows are missing". Draw a small loop beside the dot instead.
+      const r = 7 + Math.min(8, Math.sqrt(l.w) * 1.6);
+      ctx.arc(s.rx + r * 0.7, s.ry - r * 0.7, r, 0, 6.2832);
+    } else {
+      ctx.moveTo(s.rx, s.ry);
+      ctx.quadraticCurveTo(l.cx, l.cy, e.rx, e.ry);
+    }
     ctx.stroke();
   }
   ctx.setLineDash([]);

@@ -120,8 +120,8 @@ PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
     ("out_folder", "Output folder", "FOLDER", True, "Output", ""),
     ("page_name", "Page file name", "TEXT", False, "Input", ""),
-    ("o_name", "Origin name field", "COLUMN", False, "Input", ""),
-    ("d_name", "Destination name field", "COLUMN", False, "Input", ""),
+    ("o_name", "Place name field (origin)", "COLUMN", False, "Input", ""),
+    ("d_name", "Place name field (destination)", "COLUMN", False, "Input", ""),
     ("value", "Value field (empty counts 1)", "COLUMN", False, "Input", ""),
     ("date", "Date or day field", "COLUMN", False, "Input", ""),
     ("o_lon", "Origin longitude field", "COLUMN", False, "Input", ""),
@@ -230,14 +230,19 @@ HELP = {
         "empty for index.html. A name without .html gets it added."
     ),
     "o_name": (
-        "The column holding the place a flow starts from. It is not needed when "
-        "the table has longitude/latitude columns, or when a places layer or an "
-        "outlines layer can locate the names."
+        "The column holding the place a flow starts from. When one column names "
+        "the village and the origins and destinations are told apart by their "
+        "coordinates, choose that column here AND in the destination field: the "
+        "page then keeps both ends (two positions, one name). Not needed at all "
+        "when a places layer or an outlines layer can locate the names."
     ),
     "d_name": (
-        "The column holding the place a flow goes to. Leave it empty when each "
-        "row describes one place: the origin column is then used for both ends "
-        "and the page counts the rows as records in that place."
+        "The column holding the place a flow goes to. Empty: the origin column "
+        "is used for both ends, and each row counts as a record inside that "
+        "place. When the origins and destinations are separated by their "
+        "coordinates rather than by their names, put the same column here as "
+        "in the origin field - the two positions stay two dots, so the flow is "
+        "drawn instead of collapsing."
     ),
     "value": (
         "The column holding the quantity to draw - households, people, cases, "
@@ -668,9 +673,16 @@ class BuildFlowMapPage(object):
     # -------------------------------------------------------------- guessing
     @staticmethod
     def _title_from(layer):
-        text = os.path.basename(str(layer or "").rstrip("\\/"))
+        """A readable title from a layer name - never from its repr."""
+        text = str(layer or "").strip()
+        if "<" in text and "object at 0x" in text:
+            return "Flow map"
+        text = text.strip("'\"")
+        if "=" in text and text.split("=", 1)[0].strip().upper() == "CIMPATH":
+            text = text.split("=", 1)[1]
+        text = os.path.basename(text.rstrip("\\/"))
         text = os.path.splitext(text)[0]
-        text = text.strip("_ ").replace("_", " ").strip()
+        text = text.strip("_ $").replace("_", " ").strip()
         if not text:
             return "Flow map"
         return text[:1].upper() + text[1:]
@@ -826,18 +838,11 @@ class BuildFlowMapPage(object):
             self._guessed = guessed
             title = by_name.get("title")
             if title is not None and not title.altered and not title.value:
-                title.value = self._title_from(flows.value)
+                # valueAsText, never value: for a layer, value is an ArcGIS
+                # object whose str() is "<MappingTableObject object at 0x...>"
+                title.value = self._title_from(self._text(flows))
 
-        # 3. one name column names both ends of a row, unless both were chosen
-        o_name = by_name.get("o_name")
-        d_name = by_name.get("d_name")
-        if o_name is not None and d_name is not None and not o_name.altered and not d_name.altered:
-            if self._text(d_name) and not self._text(o_name):
-                o_name.value = self._text(d_name)
-            elif self._text(o_name) and not self._text(d_name):
-                d_name.value = self._text(o_name)
-
-        # 4. the value column decides what the unit is called, when unset
+        # 3. the value column decides what the unit is called, when unset
         unit = by_name.get("unit")
         value_column = self._text(by_name.get("value")) if by_name.get("value") else ""
         if unit is not None and not unit.altered and not self._text(unit) and value_column and CORE:
@@ -846,7 +851,7 @@ class BuildFlowMapPage(object):
             except Exception:
                 pass
 
-        # 5. a point layer carries its own coordinates
+        # 4. a point layer carries its own coordinates
         if self._is_points(flows.value):
             for lon, lat in (("o_lon", "o_lat"), ("d_lon", "d_lat")):
                 for name in (lon, lat):
@@ -857,7 +862,7 @@ class BuildFlowMapPage(object):
                         except Exception:
                             pass
 
-        # 6. what the current choices do to the data, as the user changes them
+        # 5. what the current choices do to the data, as the user changes them
         mapping = self._mapping_from(by_name)
         try:
             findings = CORE.diagnose_mapping(sample, mapping)
