@@ -230,10 +230,14 @@ test('drawing paints the expected layers', () => {
   page.input('bld', 0);
 });
 
-test('reduced motion stops the animation loop but still draws', () => {
+test('the animation runs even when the system asks for reduced motion', () => {
+  // Windows "animation effects off" sets prefers-reduced-motion, and the page
+  // honoured it by drawing one still frame: flows with no travellers, a
+  // timeline that never moved. It read as a broken page, so the animation is
+  // the default now. The travellers are drawn in both cases.
   const still = loadPage({ reducedMotion: true });
-  assert.ok(still.ctx().__calls.arc > 0, 'draws the static frame');
-  assert.equal(still.log.raf, 0, 'no animation frames are scheduled');
+  assert.ok(still.ctx().__calls.arc > 0, 'draws the first frame');
+  assert.ok(still.log.raf > 0, 'and keeps asking for frames');
   still.click('bPlay');
   assert.ok(still.log.tickers.length >= 1, 'the timeline ticker started');
   const before = still.T.get().upTo;

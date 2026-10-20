@@ -101,8 +101,12 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
   are matched against the places layer, then the outline layers: accents, case,
   punctuation and decorations are ignored, so *Ségou*, *SEGOU* and
   *Koutiala (Sikasso)* all find their feature.
-- **The time axis.** Dates become whole days counted from the earliest one, so
-  day 0 is the first day of the record and the slider drives a real timeline.
+- **The time axis.** With a date column, dates become whole days counted from
+  the earliest one, so day 0 is the first day of the record and the slider
+  drives a real timeline. **Without a date column**, the rows' own order becomes
+  a short axis of *steps*: the flows appear one after another, the slider and
+  Play do something, and the label says `Step 4` rather than pretending to know
+  a date.
   ISO (`2026-01-04`), day-first (`31/01/2026`) and month-first (`01/04/2026`
   = 4 January) are all read, plus a column of plain numbers as day numbers.
   Unreadable dates are reported and treated as the first day.

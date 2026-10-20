@@ -52,7 +52,9 @@ function draw(t) {
     ctx.stroke();
   }
   ctx.setLineDash([]);
-  if (!RM) {
+  {
+    // the dots travelling along the lines are the flow: they are drawn on
+    // every frame, reduced motion or not
     ctx.fillStyle = C.spark;
     for (const l of links) {
       if (!l.ph.length) continue;

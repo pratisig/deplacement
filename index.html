@@ -2223,9 +2223,10 @@ const dateFmt = d =>
 
 /** Day index -> label. Falls back to "Day n" when the source has no dates. */
 function fd(day) {
-  const start = D && D.meta ? D.meta.dateStart : null;
-  if (!start) return 'Day ' + day;
-  return dateFmt(new Date(Date.parse(start + 'T00:00:00Z') + day * 86400000));
+  const meta = (D && D.meta) || {};
+  if (!meta.dateStart && meta.dateMode === 'sequence') return 'Step ' + (day + 1);
+  if (!meta.dateStart) return 'Day ' + day;
+  return dateFmt(new Date(Date.parse(meta.dateStart + 'T00:00:00Z') + day * 86400000));
 }
 
 const cv = $('#cv'),
@@ -2937,7 +2938,10 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     if (min !== 0) warnings.push('Day numbers were shifted to start at 0.');
     rows.forEach(r => dayOfRow.push(Math.round((num(get(r, mapping.date)) ?? min) - min)));
   } else {
-    rows.forEach(() => dayOfRow.push(0));
+    // no date column: the rows' own order becomes a short axis of steps, so
+    // the slider and Play do something instead of standing still
+    const steps = Math.max(1, Math.ceil(rows.length / 60));
+    rows.forEach((_, i) => dayOfRow.push(Math.floor(i / steps)));
   }
   const maxDay = Math.max(0, ...dayOfRow);
 
@@ -3063,7 +3067,8 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     groupLabel: options.groupLabel || (boundaries[0] ? 'area' : ''),
     source: options.source || 'Loaded from ' + (options.fileName || 'a file'),
     dateStart: dateMode === 'date' ? dateStart : null,
-    dateMode,
+    // "sequence": no date column, the rows' order drives the timeline
+    dateMode: dateMode === 'none' ? 'sequence' : dateMode,
   };
 
   const source = {
@@ -3902,7 +3907,9 @@ function draw(t) {
     ctx.stroke();
   }
   ctx.setLineDash([]);
-  if (!RM) {
+  {
+    // the dots travelling along the lines are the flow: they are drawn on
+    // every frame, reduced motion or not
     ctx.fillStyle = C.spark;
     for (const l of links) {
       if (!l.ph.length) continue;
@@ -5627,13 +5634,10 @@ $('#bPlay').addEventListener('click', () => {
   playing = true;
   $('#bPlay').textContent = 'Pause';
   const step = Math.max(1, Math.round((D.maxDay + 1) / 120));
-  timer = setInterval(
-    () => {
-      setDay(upTo + step);
-      if (upTo >= D.maxDay) stop();
-    },
-    RM ? 400 : 110,
-  );
+  timer = setInterval(() => {
+    setDay(upTo + step);
+    if (upTo >= D.maxDay) stop();
+  }, 110);
 });
 let rt;
 addEventListener('resize', () => {
@@ -6029,8 +6033,12 @@ function boot() {
   loadSource(window.__PRELOAD__ || EXAMPLE);
   setBlend(0, false);
   setLimit(D.admin2 ? 'districts' : D.admin1 ? 'governorates' : 'off');
-  if (RM) draw(0);
-  else requestAnimationFrame(loop);
+  // The piece is an animation: the flows run and the travellers move. Windows
+  // "show animations off" sets prefers-reduced-motion, and this page used to
+  // honour it by drawing a single still frame - which reads as a broken page,
+  // not as a considerate one. Motion is on, and the Motion button turns it off.
+  draw(0);
+  requestAnimationFrame(loop);
 }
 
 /** The page's entry point: a failure here is reported, never silent. */

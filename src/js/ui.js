@@ -168,13 +168,10 @@ $('#bPlay').addEventListener('click', () => {
   playing = true;
   $('#bPlay').textContent = 'Pause';
   const step = Math.max(1, Math.round((D.maxDay + 1) / 120));
-  timer = setInterval(
-    () => {
-      setDay(upTo + step);
-      if (upTo >= D.maxDay) stop();
-    },
-    RM ? 400 : 110,
-  );
+  timer = setInterval(() => {
+    setDay(upTo + step);
+    if (upTo >= D.maxDay) stop();
+  }, 110);
 });
 let rt;
 addEventListener('resize', () => {
@@ -570,8 +567,12 @@ function boot() {
   loadSource(window.__PRELOAD__ || EXAMPLE);
   setBlend(0, false);
   setLimit(D.admin2 ? 'districts' : D.admin1 ? 'governorates' : 'off');
-  if (RM) draw(0);
-  else requestAnimationFrame(loop);
+  // The piece is an animation: the flows run and the travellers move. Windows
+  // "show animations off" sets prefers-reduced-motion, and this page used to
+  // honour it by drawing a single still frame - which reads as a broken page,
+  // not as a considerate one. Motion is on, and the Motion button turns it off.
+  draw(0);
+  requestAnimationFrame(loop);
 }
 
 /** The page's entry point: a failure here is reported, never silent. */

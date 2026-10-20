@@ -1001,7 +1001,14 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             warnings.append("Day numbers were shifted to start at 0.")
         day_of_row = [int(round((v if v is not None else first) - first)) for v in values]
     else:
-        date_mode = "none"
+        # No date column. The rows still have an order, and a page whose
+        # timeline is a single day has a slider that does nothing and a Play
+        # button that stops at once - which reads as "the animation is
+        # broken". Each row gets a step on a short axis instead, labelled as
+        # a step, not as a date.
+        date_mode = "sequence"
+        steps = max(1, int(math.ceil(len(rows) / 60.0)))
+        day_of_row = [i // steps for i in range(len(rows))]
     max_day = max([0] + day_of_row)
 
     # ---- places -----------------------------------------------------------

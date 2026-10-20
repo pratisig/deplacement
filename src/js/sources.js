@@ -169,7 +169,10 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     if (min !== 0) warnings.push('Day numbers were shifted to start at 0.');
     rows.forEach(r => dayOfRow.push(Math.round((num(get(r, mapping.date)) ?? min) - min)));
   } else {
-    rows.forEach(() => dayOfRow.push(0));
+    // no date column: the rows' own order becomes a short axis of steps, so
+    // the slider and Play do something instead of standing still
+    const steps = Math.max(1, Math.ceil(rows.length / 60));
+    rows.forEach((_, i) => dayOfRow.push(Math.floor(i / steps)));
   }
   const maxDay = Math.max(0, ...dayOfRow);
 
@@ -295,7 +298,8 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     groupLabel: options.groupLabel || (boundaries[0] ? 'area' : ''),
     source: options.source || 'Loaded from ' + (options.fileName || 'a file'),
     dateStart: dateMode === 'date' ? dateStart : null,
-    dateMode,
+    // "sequence": no date column, the rows' order drives the timeline
+    dateMode: dateMode === 'none' ? 'sequence' : dateMode,
   };
 
   const source = {

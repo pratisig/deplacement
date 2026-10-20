@@ -32,9 +32,10 @@ const dateFmt = d =>
 
 /** Day index -> label. Falls back to "Day n" when the source has no dates. */
 function fd(day) {
-  const start = D && D.meta ? D.meta.dateStart : null;
-  if (!start) return 'Day ' + day;
-  return dateFmt(new Date(Date.parse(start + 'T00:00:00Z') + day * 86400000));
+  const meta = (D && D.meta) || {};
+  if (!meta.dateStart && meta.dateMode === 'sequence') return 'Step ' + (day + 1);
+  if (!meta.dateStart) return 'Day ' + day;
+  return dateFmt(new Date(Date.parse(meta.dateStart + 'T00:00:00Z') + day * 86400000));
 }
 
 const cv = $('#cv'),
