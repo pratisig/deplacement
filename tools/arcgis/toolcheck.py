@@ -22,6 +22,7 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -510,12 +511,15 @@ def run(module, out_html, out_json):
     stub.reset()
     register_layers()
     out_dir = os.path.dirname(os.path.abspath(out_html))
+    # a GeoJSON file for the "layer added from JSON" case, in its own folder
+    json_folder = tempfile.mkdtemp(prefix="flowmap-json-")
+    write_json_layer(json_folder)
 
     tool = module.Toolbox().tools[0]()
     params = tool.getParameterInfo()
     by_name = {p.name: p for p in params}
     dialog_checks(module, tool, params, by_name)
-    column_checks(tool, params, by_name, os.path.dirname(os.path.abspath(__file__)))
+    column_checks(tool, params, by_name, json_folder)
 
     # ---- a run from a folder and a name --------------------------------
     tool = module.Toolbox().tools[0]()
@@ -822,7 +826,6 @@ def main(argv=None):
     folder = os.path.dirname(os.path.abspath(args.out))
     if folder and not os.path.isdir(folder):
         os.makedirs(folder)
-    write_json_layer(os.path.dirname(os.path.abspath(__file__)))
     module = load_toolbox(os.path.join(ROOT, "arcgis", "FlowMap.pyt"))
     dataset, messages, warnings = run(module, args.out, args.json)
 

@@ -201,3 +201,19 @@ test('the toolbox installs as a folder ArcGIS Pro can load', { skip: !python }, 
   );
   assert.match(install.stdout, /everything the toolbox needs is here/);
 });
+
+test(
+  'every column parameter is a drop-down filled from the chosen table',
+  { skip: !python },
+  () => {
+    const result = ok(
+      once('dialog', ['tools/arcgis/dialogcheck.py']),
+      'dialogcheck: the pane contract',
+    );
+    assert.match(result.stdout, /is a value list/);
+    assert.match(result.stdout, /JSON layer: .* offers the table's columns/);
+    assert.match(result.stdout, /updateMessages alone fills the drop-downs/);
+    const tally = /(\d+) of (\d+) checks ok/.exec(result.stdout);
+    assert.equal(tally[1], tally[2]);
+  },
+);

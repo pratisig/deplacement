@@ -12,14 +12,15 @@
     "format": "prettier --write src tools test build.mjs",
     "format:check": "prettier --check src tools test build.mjs",
     "render": "node tools/render-map.mjs",
-    "arcgis:selftest": "python3 arcgis/flowmap_core.py selftest && python3 tools/arcgis/toolcheck.py --out tools/out/arcgis-tool.html --json tools/out/arcgis-tool.json && python3 tools/arcgis/build-help.py --check",
+    "arcgis:selftest": "python3 arcgis/flowmap_core.py selftest && python3 tools/arcgis/toolcheck.py --out tools/out/arcgis-tool.html --json tools/out/arcgis-tool.json && python3 tools/arcgis/dialogcheck.py && python3 tools/arcgis/build-help.py --check",
     "package:arcgis": "node tools/package-arcgis.mjs",
     "boundaries": "node tools/build-boundaries.mjs",
     "serve": "python3 -m http.server 8000 --bind 0.0.0.0",
     "verify:exports": "node --test test/export.test.mjs && python3 tools/verify-exports.py",
     "arcgis:help": "python3 tools/arcgis/build-help.py",
     "arcgis:checkhelp": "python3 tools/arcgis/build-help.py --check",
-    "arcgis:check": "python3 arcgis/check_install.py --stub tools/arcgis"
+    "arcgis:check": "python3 arcgis/check_install.py --stub tools/arcgis",
+    "arcgis:dialog": "python3 tools/arcgis/dialogcheck.py"
   },
   "engines": {
     "node": ">=18"

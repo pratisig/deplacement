@@ -253,6 +253,12 @@ tested.
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
   enabled, `.lyrx`), and every failure path;
+- checks the pane itself (`tools/arcgis/dialogcheck.py`, 420 checks): on a
+  feature table, a standalone table, a point layer, a shapefile and a layer
+  added from JSON, every column parameter is a value list, holds the columns
+  of the dataset chosen above it, follows the dataset when it changes, drops a
+  column the new table lacks, fills itself when the dialog is reopened
+  (`updateMessages` alone), and accepts every item clicked in it;
 - checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
   23 checks) and that the help XML matches the toolbox
   (`python3 tools/arcgis/build-help.py --check`);

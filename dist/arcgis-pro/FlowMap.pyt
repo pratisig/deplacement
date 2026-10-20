@@ -515,13 +515,8 @@ class BuildFlowMapPage(object):
             except Exception:
                 pass
         if not names:
-            try:
-                with arcpy.da.SearchCursor(dataset, ["*"]) as cursor:
-                    for name in getattr(cursor, "fields", None) or []:
-                        names.append(str(name))
-            except Exception:
-                pass
-        if not names:
+            # a layer added from a JSON or GeoJSON file: Pro can list no field
+            # for it, so the file itself is read
             names = self._json_columns(dataset)
         return self._clean_columns(names)
 
@@ -678,6 +673,23 @@ class BuildFlowMapPage(object):
             return "Flow map"
         return text[:1].upper() + text[1:]
 
+    def _refresh_lists(self, by_name):
+        """Fill every column drop-down from the dataset it belongs to.
+
+        Called from updateParameters *and* from updateMessages: Pro does not
+        promise to call updateParameters when a dialog opens again on the
+        values of the previous run, and a pane that comes back with a table
+        chosen and twelve empty lists is the very thing this tool exists to
+        stop. updateMessages is called; so the lists are filled there too.
+        """
+        for name, source in COLUMN_SOURCES.items():
+            param = by_name.get(name)
+            if param is None:
+                continue
+            dataset = by_name.get(source)
+            dataset = dataset.value if dataset is not None else None
+            self._sync_columns(param, self._columns_of(dataset) if dataset else [])
+
     def _sync_columns(self, param, columns):
         """Fill one column drop-down from the dataset it belongs to.
 
@@ -751,13 +763,7 @@ class BuildFlowMapPage(object):
             self._findings = None
 
         # 1. every column drop-down follows its dataset
-        for name, source in COLUMN_SOURCES.items():
-            param = by_name.get(name)
-            if param is None:
-                continue
-            dataset = by_name.get(source)
-            dataset = dataset.value if dataset is not None else None
-            self._sync_columns(param, self._columns_of(dataset) if dataset else [])
+        self._refresh_lists(by_name)
 
         if CORE is None or not flows.value:
             return
@@ -836,6 +842,8 @@ class BuildFlowMapPage(object):
         by_name = {param.name: param for param in parameters}
         for param in parameters:
             self._clear(param)
+        # the lists first: every check below reads a column back
+        self._refresh_lists(by_name)
         flows = by_name.get("flows")
         if flows is None or not flows.value:
             return
