@@ -27,6 +27,12 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: The parameter help matches the toolbox
+        run: npm run arcgis:checkhelp
+
+      - name: The toolbox installs
+        run: npm run arcgis:check
+
       - name: Render the map
         run: npm run render
 

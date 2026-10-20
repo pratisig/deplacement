@@ -20,47 +20,71 @@ All three produce the same page, from the same dataset, because they share
 ### Install
 
 1. Copy this whole folder somewhere permanent, for example
-   `C:\Users\<you>\Documents\ArcGIS\FlowMap\`. It needs `FlowMap.pyt`,
-   `flowmap_core.py` and the built `index.html` side by side — that is exactly
-   what `node tools/package-arcgis.mjs` produces (`dist/arcgis-pro/`, and a zip
-   of the same).
+   `C:\Users\<you>\Documents\ArcGIS\FlowMap\`. It needs, side by side:
+
+   | File | What it is |
+   | --- | --- |
+   | `FlowMap.pyt` | the toolbox |
+   | `flowmap_core.py` | the engine — **replace it at the same time as the `.pyt`** |
+   | `FlowMap.pyt.xml` | the toolbox description |
+   | `FlowMap.BuildFlowMapPage.pyt.xml` | the help behind every (i) button |
+   | `index.html` | the page template the tool fills |
+   | `check_install.py` | the doctor, if something goes wrong |
+
+   That is exactly what `node tools/package-arcgis.mjs` produces
+   (`dist/arcgis-pro/`, and a zip of the same).
 2. In ArcGIS Pro: **Insert → Toolbox → Add Toolbox…** and pick `FlowMap.pyt`.
+   If an older FlowMap toolbox is already open, **remove it first** (right-click
+   → *Remove*): an old folder left on the machine can otherwise supply an old
+   engine.
 3. Open **Flow map → Build a flow map page**.
 
 The tool writes one HTML file. Double-click it, or tick *Open the page when it
 is written*.
 
-### Parameters
+### Parameters — 28, and only two are required
 
-**1 · Input**
+The ten fields facing you, in this order: the table, the output folder, the page
+name, then the six columns. Everything else is folded into three collapsible
+groups.
 
-| Parameter | Notes |
-| --- | --- |
-| Flow table or layer | A table, a geodatabase table, a CSV in the project, or a feature layer |
-| Output page (HTML) | Where the page goes |
-| Places to look names up | Optional point layer: gives every name a position |
-| Name field in the places layer | Matches the flow table's names |
-| Group field in the places layer | Optional: colours and groups the dots |
+| Parameter | Required | What it is |
+| --- | --- | --- |
+| Flow table or layer | **yes** | A layer, a feature class, a standalone table, a CSV, a JSON or a GeoJSON layer |
+| Output folder | **yes** | Browse to it. `index.html` is written inside, or the page name below |
+| Page file name | no | Default `index.html`; a name without `.html` gets it added |
+| Origin / Destination name field | no | A place name. Not needed when there are coordinates, or a places/outlines layer |
+| Value field | no | The quantity to draw. Must hold numbers; empty counts 1 |
+| Date or day field | no | Drives the animation |
+| Origin / Destination longitude, latitude | no | Degrees, WGS84 |
 
-**2 · Outlines**
+*Places and outlines*: places layer + its name and group columns, detailed and
+coarse outlines + their name columns.
 
-| Parameter | Notes |
-| --- | --- |
-| Detailed outlines | Optional polygons, drawn under everything (districts, communes) |
-| Name field in the outlines | Lets a name in the table be found on the map |
-| Coarse outlines | Optional second polygon layer (provinces, regions) |
-| Outline detail in degrees | Douglas–Peucker tolerance; 0 keeps every vertex. 0.001° ≈ 110 m, 0.01° ≈ 1.1 km |
+*Text on the page*: open when done, title, subtitle, unit, dot label, group
+label, source note. Unit and labels are deduced when left empty.
 
-**3 · Columns** — Origin name (required), Destination name (required), Value
-(default 1), Date or day number, Origin/Destination group, Origin/Destination
-longitude and latitude. The tool guesses these from the column names on the
-first run; change anything it got wrong.
+*More options*: add the flows to the map for the Time Slider, page template,
+dataset JSON.
 
-**4 · Text on the page** — Title, Subtitle, Unit, *What one dot is called*,
-*What a group is called*, Source note.
+**Every column parameter is a drop-down of the table's own columns.** The tool
+reads them itself — `ListFields`, then `Describe().fields`, then a cursor, then
+the JSON file behind a layer added from JSON or GeoJSON — so a layer Pro's own
+field control refuses (*"CIMPATH=Map/_name_.json"* is the usual case) still
+gives a full list. A column is greyed out until its dataset exists, and a
+column the new table does not have is dropped rather than sent on.
 
-**5 · Output** — *Also write the dataset (JSON)* for reuse elsewhere, and
-*Open the page when it is written*.
+**Nothing is guessed from a column name alone.** The tool samples 200 rows and
+judges the content: a column of identifiers is never a place name, a text column
+is never a value, coordinates must be in degrees, and a date column must read as
+a date. What it finds is shown under the parameter while the dialog is open —
+*The value column "CSI_CASE" holds no number that can be read (examples:
+"CSI-001", "CSI-014")* — and repeated as warnings if a build fails.
+
+**Coordinates are checked against the numbers.** If the column called
+longitude holds what are plainly latitudes, the tool says so and swaps them
+(`The destination longitude and latitude were read the wrong way round`), so a
+mislabeled export cannot silently draw a map of the wrong hemisphere.
 
 ### What the page does with the table
 
@@ -79,7 +103,8 @@ first run; change anything it got wrong.
   name — in its own column, in the places layer, or inherited from the row —
   wins. A city that appears in ten rows is one dot, not ten.
 - **Values.** A row with a value of 0, or a name that cannot be located, is
-  dropped — and reported as a warning, never silently.
+  dropped — and reported as a warning, never silently. A value column with no
+  number at all stops the build before it starts, naming the column.
 - **One-place rows.** A point layer is a table of places, not of pairs: each row
   becomes a record *within* that place (the "inside" column of the page's
   table).
@@ -98,15 +123,39 @@ The longitude/latitude parameters are disabled and the geometry is used.
 
 **Longitude/latitude columns.** Map Origin longitude/origin latitude (and,
 if the table has them, destination longitude/latitude). No outlines are needed,
-though they make the map readable.
+though they make the map readable. This is the shape of the table that failed
+once: `Village`, `CSI_CASE`, `MILDA_distribuees`, `Lon_dept`, `Lat_dept`,
+`Longitude_rep`, `Latitude_rep` — the tool picks the village column, refuses
+`CSI_CASE` as a value and counts `MILDA_distribuees`, and pairs the two
+coordinate sets the right way round.
 
 ### Size
 
 Boundaries and places travel inside the page. A district layer with 400
-features and 50 000 vertices is about 1 MB of the page; *Outline detail in
-degrees* at 0.005 usually cuts that by more than half with no visible loss.
-The page draws well with a few thousand places and a few hundred thousand
-flows; beyond that, aggregate the table first.
+features and 50 000 vertices is about 1 MB of the page; the tool picks the
+outline detail itself from the amount of geometry (0.005° to 0.02°), which
+usually halves that with no visible loss. The page draws well with a few
+thousand places and a few hundred thousand flows; beyond that, aggregate the
+table first.
+
+### The animation, inside Pro as well
+
+*Add the flows to the map, ready for the Time Slider* (on by default) makes the
+same run do a second thing:
+
+- a line feature class is written to `FlowMap.gdb` in the output folder, with
+  `DAY`, `WHEN`, `ORIGIN`, `DESTINATION` and `VALUE` fields;
+- it is added to the active map, time is turned on with `WHEN` as the start
+  field, and `FlowMap-flows.lyrx` is saved next to the page.
+
+Then open the **Time Slider** on the map and press play: the animation plays
+on your own map, with your basemap and your layout, and the **Animation** tab
+exports it as a video. A Python toolbox cannot draw in the map, so this is the
+route that puts the animation there rather than in a browser.
+
+If the layer cannot be added (no project open, or a build without the time
+API), the page is still written — the tool warns and says which field to pick
+by hand in *Layer Properties → Time*. Nothing else is lost.
 
 ---
 
@@ -124,7 +173,7 @@ node tools/render-map.mjs --html demo.html --out docs/arcgis-demo.png
 # a page from a spec file
 python3 flowmap_core.py build --input spec.json --out page.html --json dataset.json
 
-# the checks (28 of them, no dependencies)
+# the checks (51 of them, no dependencies)
 python3 flowmap_core.py selftest
 ```
 
@@ -194,12 +243,19 @@ tested.
 
 `npm test` runs `test/arcgis.test.mjs`, which:
 
-- runs `flowmap_core.py selftest` (29 checks: names, dates, geometry, the
-  dataset, the page);
+- runs `flowmap_core.py selftest` (51 checks: names, dates, geometry, the
+  dataset, the page, and what a column holds — identifiers, metres, readable
+  dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 41 checks): parameter wiring, field guessing,
-  cursors, geometry parts, the WGS84 request, messages and warnings, the two
-  failure paths;
+  `tools/arcgis/toolcheck.py`, 100 checks): the 28 parameters, the drop-down
+  lists including a JSON layer, the folder and page name, the guessing on the
+  table that failed in the field, the swap of two mislabeled coordinate
+  columns, cursors, geometry parts, the WGS84 request, messages and warnings,
+  the animation layer (feature class, fields, one line per flow, dates, time
+  enabled, `.lyrx`), and every failure path;
+- checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
+  23 checks) and that the help XML matches the toolbox
+  (`python3 tools/arcgis/build-help.py --check`);
 - loads the page the toolbox wrote in the project's own browser harness and
   compares it, number for number, with the dataset the toolbox reported.
 

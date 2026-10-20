@@ -293,6 +293,541 @@ def rings_bounds(rings):
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
+# ------------------------------------------------------- what a column holds
+#
+# A column is judged by what it holds, not only by what it is called. That is
+# the difference between a tool that opens with sensible values and one that
+# hands the page a case number where it wanted a place name: "CSI_CASE" looks
+# like a name until you read the cells, and "Besoins_estimes_1_MILDA_2_personnes"
+# contains the letters of "time" without being a date.
+
+# Words that mark an identifier rather than a quantity. A column of them is
+# never a name and never a number to draw.
+ID_WORDS = (
+    "id", "ids", "code", "csi", "case", "cas", "ref", "reference", "cle",
+    "key", "uid", "uuid", "gid", "fid", "oid", "objectid", "numero", "num",
+    "no", "n", "index", "idx", "row", "record", "enregistrement", "sir",
+    "matricule", "identifiant", "ident", "tag",
+)
+
+# What a column name suggests it can be. Whole words only: substring matching
+# reads "es-ti-mes" as "time" and quietly picks the wrong column.
+ROLE_WORDS = {
+    "oName": ("origin", "orig", "from", "source", "depart", "start", "o"),
+    "dName": ("destination", "dest", "to", "arrive", "arrival", "vers", "d"),
+    "name": (
+        "name", "nom", "village", "ville", "city", "town", "place", "site",
+        "localite", "locality", "lieu", "commune", "district", "zone",
+        "quartier", "sous", "prefecture", "prefect", "colline", "secteur",
+    ),
+    "group": (
+        "group", "groupe", "region", "province", "governorate", "gov",
+        "state", "dept", "department", "departement", "county", "area",
+        "admin", "adm", "zone",
+    ),
+    "lon": ("lon", "long", "longitude", "lng", "x", "east", "est"),
+    "lat": ("lat", "latitude", "y", "north", "nord"),
+    "date": (
+        "date", "day", "jour", "journee", "time", "mois", "month", "week",
+        "semaine", "annee", "year", "periode", "period", "timestamp",
+    ),
+    "value": (
+        "value", "valeur", "count", "nombre", "total", "sum", "cases", "cas",
+        "hh", "households", "menage", "menages", "people", "personnes",
+        "population", "pop", "flow", "volume", "milda", "besoins", "deplaced",
+        "deplaces", "displaced", "arrivals", "departures", "tonnes",
+    ),
+}
+
+_CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_SPLIT = re.compile(r"[^A-Za-z0-9]+")
+
+
+def column_words(name):
+    """The words of a column name, whole. ``Lon_dept`` -> ['lon', 'dept']."""
+    parts = []
+    for chunk in _SPLIT.split(str(name or "")):
+        if not chunk:
+            continue
+        parts.extend(_CAMEL.split(chunk))
+    return [p.lower() for p in parts if p and not p.isdigit()]
+
+
+def name_matches(name, role):
+    """True when a column name carries a word of this role."""
+    words = column_words(name)
+    wanted = ROLE_WORDS.get(role, ())
+    for word in words:
+        for candidate in wanted:
+            if word == candidate:
+                return True
+            # a plural or a suffix: "menages" for "menage", "villages" for
+            # "village"; never a prefix that swallows a different word
+            if len(candidate) >= 4 and (word == candidate + "s" or word == candidate + "x"):
+                return True
+    return False
+
+
+def profile_column(name, values):
+    """Read a column: how many cells, how many numbers, dates, distinct.
+
+    Cheap on purpose - it runs on a sample - but it is what lets the tool say
+    "this column holds no number" instead of discovering it after a failed
+    build, and what lets it refuse an identifier as a place name.
+    """
+    cells = [v for v in (values or []) if v is not None and str(v).strip() != ""]
+    numbers, dates = [], 0
+    for cell in cells:
+        number = to_number(cell)
+        if number is None:
+            continue
+        numbers.append(number)
+    for cell in cells:
+        if parse_date_value(cell) is not None:
+            dates += 1
+    total = len(cells) or 1
+    distinct = len({str(v).strip() for v in cells})
+    return {
+        "name": str(name),
+        "cells": len(cells),
+        "numbers": len(numbers),
+        "dates": dates,
+        "distinct": distinct,
+        "numeric": len(numbers) >= max(1, int(0.8 * total)),
+        "date": dates >= max(1, int(0.6 * total)),
+        "text": len(numbers) < max(1, int(0.5 * total)),
+        "distinct_ratio": distinct / float(total) if cells else 0.0,
+        "min": min(numbers) if numbers else None,
+        "max": max(numbers) if numbers else None,
+    }
+
+
+def looks_like_id(name, prof):
+    """An identifier is not a place name, and not a quantity to draw."""
+    if any(word in ID_WORDS for word in column_words(name)):
+        return True
+    if not prof:
+        return False
+    # whole numbers, every cell distinct, running 1, 2, 3 ... n: an auto
+    # number. A column of counts is often all-distinct too, which is why the
+    # numbers alone are not enough - only a sequence is a key.
+    if not (prof["numeric"] and prof["min"] is not None and prof["distinct_ratio"] > 0.99):
+        return False
+    if not (float(prof["min"]).is_integer() and float(prof["max"]).is_integer()):
+        return False
+    span = prof["max"] - prof["min"] + 1
+    return span == prof["distinct"] and prof["distinct"] > 3
+
+
+def looks_projected(prof):
+    """A coordinate column in metres: no number lands in a degree range."""
+    if not prof or not prof["numeric"]:
+        return False
+    if prof["min"] is None:
+        return False
+    return abs(prof["max"]) > 180 or abs(prof["min"]) > 180
+
+
+def out_of_degrees(prof, axis="lon"):
+    """Coordinates that cannot be degrees on this axis."""
+    if not prof or not prof["numeric"] or prof["min"] is None:
+        return False
+    limit = 180.0 if axis == "lon" else 90.0
+    return prof["min"] < -limit or prof["max"] > limit
+
+
+def guess_unit_label(column_name):
+    """What one unit of the value column is called, from its name."""
+    words = column_words(column_name)
+    if not words:
+        return ""
+    tests = (
+        ("households", ("household", "households", "hh", "ménage", "menage", "menages", "menages")),
+        ("people", ("people", "person", "persons", "personnes", "personne", "population", "pop", "individus")),
+        ("cases", ("case", "cases", "cas", "dossiers", "dossier")),
+        ("tonnes", ("tonne", "tonnes", "t")),
+        ("mildas", ("milda", "mildas")),
+    )
+    for label, wanted in tests:
+        for word in words:
+            if word in wanted:
+                return label
+    # a name that means nothing in particular: keep it, cleaned up
+    joined = " ".join(words)
+    return joined
+
+
+def _median(values):
+    ordered = sorted(values)
+    if not ordered:
+        return None
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return 0.5 * (ordered[middle - 1] + ordered[middle])
+
+
+def _km_between(a, b):
+    """Rough distance in km between two lon/lat pairs - for comparisons only."""
+    dx = (a[0] - b[0]) * math.cos(math.radians((a[1] + b[1]) / 2.0)) * 111.32
+    dy = (a[1] - b[1]) * 110.57
+    return math.hypot(dx, dy)
+
+
+def _pairs_inside(lons, lats):
+    """How many of the pairs are plausible degrees, and how many are not."""
+    good = 0
+    for lon, lat in zip(lons, lats):
+        if lon is None or lat is None:
+            continue
+        if -180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0:
+            good += 1
+    return good, max(len(lons), 1)
+
+
+def coordinate_pairing(d_lons, d_lats, samples=None, labels=("", "")):
+    """Are these two columns really (longitude, latitude)?
+
+    ``d_lons``/``d_lats`` are the destination columns as value lists,
+    ``samples`` the origin points, ``labels`` the two column names for the
+    message. Returns ``("ok" | "swap" | "unknown", reason)``.
+
+    Two tests, in order:
+
+    1. impossible values - a destination latitude of -17 with a longitude of
+       14 is legal on its own, but when swapping makes every point valid and
+       not swapping does not, the swap is certain;
+    2. proximity - destinations sit near their origins in almost every flow
+       table. If swapping brings them several times closer, the columns were
+       read the wrong way round.
+
+    Only a clear result is returned as "swap": a guess that moves real
+    coordinates is worse than a warning that says "check this".
+    """
+    d_lons = [to_number(v) for v in (d_lons or [])]
+    d_lats = [to_number(v) for v in (d_lats or [])]
+    if not d_lons or not d_lats:
+        return ("unknown", "")
+    as_is = list(zip(d_lons, d_lats))
+    swapped = list(zip(d_lats, d_lons))
+    good_as_is, total = _pairs_inside([p[0] for p in as_is], [p[1] for p in as_is])
+    good_swap, _ = _pairs_inside([p[0] for p in swapped], [p[1] for p in swapped])
+    if total < 3:
+        return ("unknown", "")
+    name_lon, name_lat = labels
+    if good_swap > good_as_is and good_swap >= 0.8 * total and good_as_is < 0.5 * total:
+        return (
+            "swap",
+            "%s holds the latitude and %s the longitude: swapping them puts "
+            "every point back on the map." % (name_lon, name_lat),
+        )
+    origins = [(float(x), float(y)) for x, y in (samples or []) if x is not None and y is not None]
+    if len(origins) < 3:
+        return ("ok" if good_as_is >= 0.9 * total else "unknown", "")
+    near_as_is = _median(
+        [_km_between(o, p) for o, p in zip(origins, as_is) if p[0] is not None and p[1] is not None]
+    )
+    near_swap = _median(
+        [_km_between(o, p) for o, p in zip(origins, swapped) if p[0] is not None and p[1] is not None]
+    )
+    if near_as_is is None or near_swap is None:
+        return ("ok", "")
+    if near_swap < 250 and near_as_is > max(500.0, 4.0 * near_swap):
+        return (
+            "swap",
+            "%s holds the latitude and %s the longitude: swapping them brings "
+            "the destinations from %s km to %s km of their origins."
+            % (name_lon, name_lat, int(near_as_is), int(near_swap)),
+        )
+    return ("ok", "")
+
+
+def _column_values(rows, name):
+    return [row.get(name) for row in rows] if name else []
+
+
+def guess_mapping(field_names, rows=None):
+    """Prefill the field mapping from the column names *and* their content.
+
+    ``rows`` is a sample of the table: when it is given, a column that holds
+    no number is never chosen as the value, a column of identifiers is never a
+    place name, and two coordinate columns are paired so that the points land
+    where the names say they should.
+    """
+    names = [str(f) for f in (field_names or [])]
+    profiles = {}
+    if rows:
+        for name in names:
+            profiles[name] = profile_column(name, _column_values(rows, name))
+
+    def prof(name):
+        return profiles.get(name)
+
+    def numeric(name):
+        p = prof(name)
+        return bool(p and p["numeric"])
+
+    def texty(name):
+        p = prof(name)
+        return bool(p and p["text"] and p["distinct"] > 1)
+
+    def dated(name):
+        p = prof(name)
+        return bool(p and p["date"])
+
+    used = set()
+
+    def take(candidates, accept=None):
+        for name in candidates:
+            if name in used:
+                continue
+            if accept is not None and not accept(name):
+                continue
+            used.add(name)
+            return name
+        return ""
+
+    def ordered(role):
+        """Columns whose name carries the role word, in table order."""
+        return [n for n in names if n not in used and name_matches(n, role)]
+
+    # longitude and latitude by name; content only confirms
+    lon_cols = [n for n in ordered("lon") if not name_matches(n, "lat")]
+    lat_cols = [n for n in ordered("lat") if not name_matches(n, "lon")]
+    # a column called "x" or "y" alone is only taken when the numbers agree
+    lon_cols = [n for n in lon_cols if numeric(n) or not rows]
+    lat_cols = [n for n in lat_cols if numeric(n) or not rows]
+
+    def axis_ok(name, axis):
+        if not rows:
+            return True
+        p = prof(name)
+        if not p or not p["numeric"]:
+            return False
+        return not out_of_degrees(p, axis)
+
+    lon_cols = [n for n in lon_cols if axis_ok(n, "lon")]
+    lat_cols = [n for n in lat_cols if axis_ok(n, "lat")]
+
+    o_lon = take(lon_cols[:1])
+    d_lon = take([n for n in lon_cols[1:] if n != o_lon] or [])
+    o_lat = take(lat_cols[:1])
+    d_lat = take([n for n in lat_cols[1:] if n != o_lat] or [])
+
+    # names: explicit origin/destination first, then any place-name column
+    def name_ok(name):
+        p = prof(name)
+        if not rows:
+            return True
+        if not p or not p["cells"]:
+            return False
+        return not looks_like_id(name, p) and p["distinct"] > 1
+
+    o_name = take(
+        [n for n in names if name_matches(n, "oName") and not name_matches(n, "dName")],
+        name_ok,
+    )
+    d_name = take(
+        [n for n in names if name_matches(n, "dName") and not name_matches(n, "oName")],
+        name_ok,
+    )
+    if not o_name:
+        o_name = take([n for n in names if name_matches(n, "name")], name_ok)
+    if not o_name:
+        # the most distinct text column is a better name than nothing
+        candidates = sorted(
+            (n for n in names if n not in used and name_ok(n) and texty(n)),
+            key=lambda n: -(prof(n)["distinct"] if prof(n) else 0),
+        )
+        o_name = take(candidates[:1])
+    if not d_name:
+        d_name = o_name
+
+    # a single group column describes both ends
+    group = take([n for n in names if name_matches(n, "group")], name_ok)
+    o_group = group
+    d_group = group
+
+    date = take([n for n in names if name_matches(n, "date")], dated if rows else None)
+    if not date and rows:
+        date = take([n for n in names if dated(n) and not numeric(n)], None)
+
+    # the value: a quantity, never an identifier
+    def value_ok(name):
+        p = prof(name)
+        if not rows:
+            return True
+        return bool(p and p["numeric"] and not looks_like_id(name, p))
+
+    value = take([n for n in names if name_matches(n, "value")], value_ok)
+    if not value:
+        # the widest numeric column that is not a coordinate or an identifier
+        candidates = sorted(
+            (
+                n
+                for n in names
+                if n not in used and value_ok(n) and n not in (o_lon, o_lat, d_lon, d_lat)
+            ),
+            key=lambda n: -(prof(n)["max"] - prof(n)["min"] if prof(n) and prof(n)["min"] is not None else 0),
+        )
+        value = take(candidates[:1])
+
+    if not d_lon and o_lon:
+        d_lon = o_lon
+    if not d_lat and o_lat:
+        d_lat = o_lat
+
+    mapping = {
+        "oName": o_name,
+        "dName": d_name or o_name,
+        "oGroup": o_group,
+        "dGroup": d_group,
+        "oLon": o_lon,
+        "oLat": o_lat,
+        "dLon": d_lon,
+        "dLat": d_lat,
+        "date": date,
+        "value": value,
+    }
+    # the destination pair may still be the wrong way round
+    if rows and o_lon and o_lat and d_lon and d_lat:
+        o_pairs = list(zip(_column_values(rows, o_lon), _column_values(rows, o_lat)))
+        o_pairs = [(to_number(a), to_number(b)) for a, b in o_pairs]
+        d_lons = [to_number(v) for v in _column_values(rows, d_lon)]
+        d_lats = [to_number(v) for v in _column_values(rows, d_lat)]
+        verdict, _reason = coordinate_pairing(
+            d_lons,
+            d_lats,
+            samples=[p for p in o_pairs if p[0] is not None],
+            labels=(d_lon, d_lat),
+        )
+        if verdict == "swap":
+            mapping["swapDest"] = True
+    return mapping
+
+
+def diagnose_mapping(rows, mapping):
+    """What is wrong with the mapping, in words, before anything is built.
+
+    Each finding is ``{"role": core role, "level": "error"|"warning"|"info",
+    "text": ...}``. The toolbox shows these next to the parameters while the
+    dialog is open and repeats them as warnings when a build fails, so a
+    mistake is never a bare "No usable rows".
+    """
+    mapping = mapping or {}
+    findings = []
+    rows = rows or []
+
+    def add(role, level, text):
+        findings.append({"role": role, "level": level, "text": text})
+
+    def prof(name):
+        return profile_column(name, _column_values(rows, name)) if name and rows else None
+
+    for role in ("oName", "dName"):
+        column = mapping.get(role)
+        if not column:
+            continue
+        p = prof(column)
+        if p and looks_like_id(column, p):
+            add(
+                role,
+                "error",
+                '"%s" looks like an identifier, not a place name (its values '
+                "are all different, e.g. %s). Choose the column that names the "
+                "place." % (column, _example(rows, column)),
+            )
+        elif p and p["distinct"] <= 1:
+            add(role, "warning", '"%s" has a single value; every row will name the same place.' % column)
+
+    value = mapping.get("value")
+    if value:
+        p = prof(value)
+        if p and p["numbers"] == 0:
+            add(
+                "value",
+                "error",
+                'The value column "%s" holds no number that can be read '
+                "(examples: %s). Choose a column of counts, or leave it empty: "
+                "each row then counts 1." % (value, _example(rows, value)),
+            )
+        elif p and looks_like_id(value, p):
+            add(
+                "value",
+                "warning",
+                '"%s" looks like an identifier; the page will add those numbers '
+                "together as if they were quantities." % value,
+            )
+
+    date = mapping.get("date")
+    if date:
+        p = prof(date)
+        if p and not p["date"] and p["numbers"] == 0:
+            add("date", "error", 'The column "%s" holds no readable date.' % date)
+
+    for axis, role in (("lon", "oLon"), ("lat", "oLat"), ("lon", "dLon"), ("lat", "dLat")):
+        column = mapping.get(role)
+        if not column:
+            continue
+        p = prof(column)
+        if p and looks_projected(p):
+            add(
+                role,
+                "error",
+                'The column "%s" holds values like %s: these are metres, not '
+                "degrees. The page draws longitude/latitude; use a layer with a "
+                "geographic coordinate system or the same columns in degrees."
+                % (column, _example(rows, column)),
+            )
+        elif p and out_of_degrees(p, axis):
+            add(
+                role,
+                "error",
+                'The column "%s" cannot be a %s: it reaches %s.'
+                % (
+                    column,
+                    "longitude" if axis == "lon" else "latitude",
+                    round(p["max"] if abs(p["max"]) >= abs(p["min"]) else p["min"], 3),
+                ),
+            )
+
+    if mapping.get("swapDest"):
+        add(
+            "dLon",
+            "warning",
+            "The destination columns look the wrong way round; they are read as "
+            "longitude = %s and latitude = %s."
+            % (mapping.get("dLon"), mapping.get("dLat")),
+        )
+
+    unit = guess_unit_label(value or "")
+    if value and unit:
+        add("value", "info", 'The values will be counted in "%s" (from "%s").' % (unit, value))
+    return findings
+
+
+def _example(rows, column, limit=3):
+    """A few real cells, for an error message that can be checked."""
+    seen = []
+    for row in rows or []:
+        cell = str(row.get(column, "") if row else "").strip()
+        if cell and cell not in seen:
+            seen.append(cell)
+        if len(seen) >= limit:
+            break
+    return ", ".join('"%s"' % value for value in seen) or "none"
+
+
+def findings_text(findings, level=("error", "warning")):
+    """One line per finding worth showing, for a message or a parameter."""
+    lines = [
+        f["text"]
+        for f in findings or []
+        if f.get("level") in level and str(f.get("text", "")).strip()
+    ]
+    return "\n".join(lines)
+
+
 # --------------------------------------------------------------- name lookup
 
 
@@ -396,6 +931,31 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
     for layer in (admin1, admin2):
         for name, rings in (layer or {}).items():
             index.add_area(name, rings)
+
+    # ---- the value column -------------------------------------------------
+    # A value column that holds no number is the mistake that emptied the
+    # first real run: every row was dropped, and the message said nothing
+    # about the column. Say it by name, before anything is built.
+    value_col = mapping.get("value")
+    if value_col and has(value_col):
+        probe = [get(r, value_col) for r in rows]
+        readable = [to_number(v) for v in probe if str(v).strip()]
+        if readable and not any(v is not None for v in readable):
+            raise ValueError(
+                'The value column "%s" holds no number that can be read '
+                "(examples: %s). Choose a column of counts, or leave the value "
+                "empty so every row counts 1."
+                % (value_col, _example(rows, value_col))
+            )
+
+    # ---- longitude/latitude the wrong way round ---------------------------
+    if mapping.get("swapDest") and has(mapping.get("dLon")) and has(mapping.get("dLat")):
+        was_lon, was_lat = mapping["dLon"], mapping["dLat"]
+        mapping["dLon"], mapping["dLat"] = was_lat, was_lon
+        warnings.append(
+            "The destination longitude and latitude were read the wrong way "
+            'round: "%s" holds the latitude and "%s" the longitude.' % (was_lon, was_lat)
+        )
 
     # ---- the time axis ----------------------------------------------------
     date_col = mapping.get("date")
@@ -519,7 +1079,12 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             if (admin1 or admin2)
             else "Add longitude/latitude fields, or give a boundary layer so places can be found by name."
         )
-        raise ValueError("No usable rows: no place could be placed on the map. " + hint)
+        findings = findings_text(diagnose_mapping(rows, mapping))
+        raise ValueError(
+            "No usable rows: no place could be placed on the map. "
+            + hint
+            + (("\n" + findings) if findings else "")
+        )
     if skipped:
         shown = ", ".join(list(dict.fromkeys(missing))[:6])
         warnings.append(
@@ -534,7 +1099,7 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
         "Each dot is one place, each line a flow between two of them. "
         "Drag the layout slider to move between true geography and a network view.",
     )
-    meta.setdefault("unit", "records")
+    meta.setdefault("unit", guess_unit_label(mapping.get("value") or "") or "records")
     meta.setdefault("nodeLabel", "place")
     meta.setdefault("groupLabel", "group" if not (admin1 or admin2) else "area")
     meta["dateStart"] = date_start if date_mode == "date" else None
@@ -625,49 +1190,6 @@ def parts_from_geometry(geometry):
     if kind == "MultiPolygon":
         return [ring for poly in coords for ring in poly]
     return []
-
-
-def guess_mapping(field_names):
-    """Prefill the field mapping from the column names — the same guesses
-    the page makes in src/js/table.js, so the dialog opens sensibly."""
-    lower = {f: str(f).lower() for f in field_names}
-    used = set()
-
-    def pick(pattern, exclude=()):
-        rx = re.compile(pattern, re.I)
-        for f in field_names:
-            if f in used or f in exclude:
-                continue
-            if rx.search(lower[f]):
-                used.add(f)
-                return f
-        return ""
-
-    mapping = {
-        "oName": pick(r"^orig|\borig|^from|^source|^o_?name|depart|départ|^o_?loc"),
-        "dName": pick(r"^dest|\bdest|^to\b|^arriv|^d_?name|^vers|^d_?loc"),
-        "oGroup": pick(r"o_?group|orig.*(group|prov|gov|region)|from.*(group|prov|gov)"),
-        "dGroup": pick(r"d_?group|dest.*(group|prov|gov|region)|to.*(group|prov|gov)"),
-        "oLon": pick(r"o_?(lon|lng|x)|orig.*(lon|lng|x)|from.*(lon|lng|x)|longitude.*(orig|from|o\b)"),
-        "oLat": pick(r"o_?lat|orig.*lat|from.*lat|latitude.*(orig|from|o\b)"),
-        "dLon": pick(r"d_?(lon|lng|x)|dest.*(lon|lng|x)|to.*(lon|lng|x)|longitude.*(dest|to)"),
-        "dLat": pick(r"d_?lat|dest.*lat|to.*lat|latitude.*(dest|to)"),
-        "date": pick(r"date|day|jour|week|month|time|mois|semaine|periode|période"),
-        "value": pick(r"value|count|nombre|total|cases|cas|hh|household|menage|ménage|people|pop|flow|vol"),
-    }
-    if not mapping["oLon"]:
-        mapping["oLon"] = pick(r"lon|lng|x")
-    if not mapping["oLat"]:
-        mapping["oLat"] = pick(r"lat|\by\b")
-    if not mapping["dLon"] and mapping["oLon"]:
-        mapping["dLon"] = mapping["oLon"]
-    if not mapping["dLat"] and mapping["oLat"]:
-        mapping["dLat"] = mapping["oLat"]
-    if not mapping["dName"] and mapping["oName"]:
-        mapping["dName"] = mapping["oName"]
-    # the mode is decided from the column itself when the dataset is built —
-    # plain numbers become a day axis without anyone choosing it
-    return mapping
 
 
 # ---------------------------------------------------------------------- demo
@@ -859,6 +1381,115 @@ def selftest():
     twice = inject_preload(page, payload)
     check("re-embedding replaces, never doubles", twice.count("__PRELOAD__") == page.count("__PRELOAD__") == 1)
     check("field names guess a mapping", guess_mapping(["ORIGIN", "DESTINATION", "Households", "Date"])["value"].lower() == "households")
+
+    # ---- what a column holds, not what it is called -----------------------
+    check("column words split off the digits", column_words("Besoins_estimes_1_MILDA_2") == ["besoins", "estimes", "milda"])
+    check("camel case splits too", column_words("LonDept") == ["lon", "dept"])
+    check(
+        "a word inside a word is not a match",
+        not name_matches("Besoins_estimes", "date") and name_matches("Date_deplacement", "date"),
+    )
+    check("households is a value word", name_matches("Households", "value") and name_matches("MENAGES", "value"))
+    case = profile_column("CSI_CASE", ["CSI-001", "CSI-014", "CSI-095", "CSI-100"])
+    check("a case number reads as text", case["text"] and case["numbers"] == 0, case)
+    check("a case number is an identifier", looks_like_id("CSI_CASE", case))
+    check("a date column reads as dates", profile_column("DATE", ["2026-01-04", "05/01/2026"])["date"])
+    metres = profile_column("X_M", ["412000", "415800", "409000"])
+    check("metres are not degrees", looks_projected(metres) and out_of_degrees(metres, "lon"), metres)
+
+    # the table that failed in the field: a case number where a count was
+    # wanted, a place name lost among codes, and two coordinate pairs
+    WRONG = [
+        {
+            "Village": "Touba",
+            "CSI_CASE": "CSI-001",
+            "MILDA_distribuees": "120",
+            "Besoins_estimes_1_MILDA_2_personnes": "400",
+            "Lon_dept": "-16.92",
+            "Lat_dept": "14.79",
+            "Longitude_rep": "-16.45",
+            "Latitude_rep": "14.42",
+        },
+        {
+            "Village": "Mbacke",
+            "CSI_CASE": "CSI-014",
+            "MILDA_distribuees": "80",
+            "Besoins_estimes_1_MILDA_2_personnes": "260",
+            "Lon_dept": "-15.90",
+            "Lat_dept": "14.79",
+            "Longitude_rep": "-15.75",
+            "Latitude_rep": "14.60",
+        },
+        {
+            "Village": "Bambey",
+            "CSI_CASE": "CSI-095",
+            "MILDA_distribuees": "45",
+            "Besoins_estimes_1_MILDA_2_personnes": "120",
+            "Lon_dept": "-16.46",
+            "Lat_dept": "14.70",
+            "Longitude_rep": "-16.30",
+            "Latitude_rep": "14.55",
+        },
+    ]
+    guessed = guess_mapping(list(WRONG[0].keys()), WRONG)
+    check("the village column is the place name", guessed["oName"] == "Village", guessed)
+    check("one name column names both ends", guessed["dName"] == "Village", guessed)
+    check("a count is preferred to a case number", guessed["value"] == "MILDA_distribuees", guessed)
+    check("no identifier becomes the value", guessed["value"] != "CSI_CASE", guessed)
+    check(
+        "the two coordinate pairs are told apart",
+        (guessed["oLon"], guessed["oLat"], guessed["dLon"], guessed["dLat"])
+        == ("Lon_dept", "Lat_dept", "Longitude_rep", "Latitude_rep"),
+        guessed,
+    )
+    check("no date is invented from 'estimes'", guessed["date"] == "", guessed)
+
+    findings = diagnose_mapping(WRONG, {"value": "CSI_CASE", "oName": "Village"})
+    check(
+        "a value column with no number is an error naming the column",
+        any(f["level"] == "error" and "CSI_CASE" in f["text"] for f in findings),
+        findings,
+    )
+    check("and its examples are shown", any("CSI-001" in f["text"] for f in findings), findings)
+
+    raised = ""
+    try:
+        build_dataset(WRONG, {"oName": "Village", "value": "CSI_CASE"})
+    except ValueError as err:
+        raised = str(err)
+    check(
+        "building with a text value column fails and says which column",
+        "CSI_CASE" in raised and "no number" in raised,
+        raised,
+    )
+
+    verdict, reason = coordinate_pairing(
+        [14.42, 14.60, 14.55],
+        [-16.45, -15.75, -16.30],
+        samples=[(-16.92, 14.79), (-15.90, 14.79), (-16.46, 14.70)],
+        labels=("Latitude_rep", "Longitude_rep"),
+    )
+    check("a swapped destination pair is spotted", verdict == "swap" and reason, (verdict, reason))
+    good, _ = build_dataset(
+        WRONG,
+        {
+            "oName": "Village",
+            "value": "MILDA_distribuees",
+            "oLon": "Lon_dept",
+            "oLat": "Lat_dept",
+            "dLon": "Latitude_rep",
+            "dLat": "Longitude_rep",
+            "swapDest": True,
+        },
+    )
+    check("and swapped back when the dataset is built", len(good["edges"]) == 3, good["edges"])
+    check("the unit is read from the value column", good["meta"]["unit"] == "mildas", good["meta"]["unit"])
+    check("guess_unit_label knows people", guess_unit_label("Personnes_deplacees") == "people", guess_unit_label("Personnes_deplacees"))
+    check(
+        "findings_text keeps the errors, one per line",
+        findings_text(findings).count("\n") >= 0 and "CSI_CASE" in findings_text(findings),
+        findings_text(findings),
+    )
 
     failed = [c for c in checks if not c[1]]
     for label, ok, detail in checks:

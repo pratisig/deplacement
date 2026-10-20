@@ -171,3 +171,33 @@ test('a table that cannot be placed fails with an explanation', { skip: !python 
   assert.match(result.stderr, /longitude\/latitude fields/, 'the error says what to do');
   assert.equal(existsSync(out), false, 'and nothing is written');
 });
+
+test('the toolbox installs as a folder ArcGIS Pro can load', { skip: !python }, () => {
+  const folder = join(root, 'arcgis');
+  const pyt = readFileSync(join(folder, 'FlowMap.pyt'));
+  assert.equal(
+    [...pyt].some(byte => byte > 127),
+    false,
+    'FlowMap.pyt must be pure ASCII or Pro refuses to load it',
+  );
+  assert.notEqual(pyt[0], 0xef, 'no byte-order mark');
+  assert.match(pyt.toString('utf8'), /_load_core\(/, 'the engine is loaded by path, not by name');
+
+  for (const name of ['FlowMap.pyt.xml', 'FlowMap.BuildFlowMapPage.pyt.xml', 'check_install.py'])
+    assert.ok(existsSync(join(folder, name)), name + ' sits next to the toolbox');
+
+  const help = readFileSync(join(folder, 'FlowMap.BuildFlowMapPage.pyt.xml'), 'utf8');
+  const entries = help.match(/<dialogReference>/g) || [];
+  assert.equal(entries.length, 28, 'one help entry per parameter');
+  assert.equal(
+    (readFileSync(join(root, 'tools/arcgis/build-help.py'), 'utf8').match(/FlowMap\.pyt/) || [])
+      .length > 0,
+    true,
+  );
+
+  const install = ran(
+    once('install', ['arcgis/check_install.py', '--stub', 'tools/arcgis']),
+    'check_install',
+  );
+  assert.match(install.stdout, /everything the toolbox needs is here/);
+});

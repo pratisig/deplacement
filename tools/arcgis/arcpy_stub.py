@@ -115,6 +115,10 @@ class _Da(object):
     def SearchCursor(layer, fields, where_clause=None, spatial_reference=None):
         return _Cursor(layer, fields, where_clause, spatial_reference)
 
+    @staticmethod
+    def InsertCursor(table, fields):
+        return _InsertCursor(table, fields)
+
 
 class _Env(object):
     workspace = None
@@ -191,6 +195,7 @@ def add_layer(name, fields, rows, shape_type=None):
 
 def reset():
     TABLES.clear()
+    reset_animation()
     CURSOR_CALLS[:] = []
     MESSAGES[:] = []
     WARNINGS[:] = []
@@ -200,3 +205,163 @@ def reset():
 
 da = _Da
 env = _Env()
+
+
+# ---------------------------------------------------------------- geometry
+#
+# Enough of the geometry and editing API for the animation layer: a point, an
+# array, a polyline, an insert cursor, a geodatabase and a map with time.
+# Everything is recorded, so a test can check what the toolbox asked for.
+
+
+class Array(list):
+    def __init__(self, items=None):
+        list.__init__(self, list(items or []))
+
+    def add(self, item):
+        self.append(item)
+
+
+class Polyline(object):
+    def __init__(self, points=None, spatial_reference=None):
+        self.points = list(points or [])
+        self.spatial_reference = spatial_reference
+        self.firstPoint = self.points[0] if self.points else None
+
+    def __iter__(self):
+        return iter([self.points])
+
+
+CREATED = {}
+FIELDS = {}
+INSERTED = {}
+LAYER_FILES = []
+CALLS = []
+MP_PROJECT = False
+
+
+def _call(name, *args, **kwargs):
+    CALLS.append((name, args, tuple(sorted(kwargs.items()))))
+
+
+class _Management(object):
+    """management.* as used by the toolbox, recording what it was asked."""
+
+    @staticmethod
+    def CreateFileGDB(folder, name):
+        _call("CreateFileGDB", folder, name)
+        path = folder.rstrip("/\\") + "/" + name
+        CREATED[path] = "gdb"
+        return path
+
+    @staticmethod
+    def CreateFeatureclass(gdb, name, shape_type, spatial_reference=None):
+        _call("CreateFeatureclass", gdb, name, shape_type, spatial_reference=spatial_reference)
+        path = gdb.rstrip("/\\") + "/" + name
+        CREATED[path] = "featureclass"
+        FIELDS.setdefault(path, [])
+        return path
+
+    @staticmethod
+    def AddField(table, name, kind, field_length=None):
+        _call("AddField", table, name, kind, field_length=field_length)
+        FIELDS.setdefault(table, []).append(name)
+        return table
+
+    @staticmethod
+    def Delete(path):
+        _call("Delete", path)
+        CREATED.pop(path, None)
+
+    @staticmethod
+    def SaveToLayerFile(layer, out_layer, is_relative_path=None):
+        _call("SaveToLayerFile", out_layer)
+        LAYER_FILES.append(out_layer)
+        return out_layer
+
+
+management = _Management()
+
+
+def Exists(path):
+    return str(path) in CREATED
+
+
+class _InsertCursor(object):
+    def __init__(self, table, fields):
+        self.table = str(table)
+        self.fields = list(fields)
+        INSERTED.setdefault(self.table, [])
+
+    def insertRow(self, row):
+        INSERTED[self.table].append(list(row))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _Time(object):
+    def __init__(self):
+        self.enabled = False
+        self.startTimeFieldName = None
+        self.endTimeFieldName = None
+
+
+class _Layer(object):
+    def __init__(self, path):
+        self.name = str(path).rstrip("/\\").split("/")[-1]
+        self.path = str(path)
+        self.time = _Time()
+        self.enable_time_calls = []
+
+    def enableTime(self, *args, **kwargs):
+        self.enable_time_calls.append((args, kwargs))
+        self.time.enabled = True
+
+
+class _Map(object):
+    def __init__(self):
+        self.layers = []
+
+    def addDataFromPath(self, path):
+        layer = _Layer(path)
+        self.layers.append(layer)
+        return layer
+
+
+class _Project(object):
+    def __init__(self):
+        self.activeMap = _Map()
+        self.homeFolder = None
+        self.filePath = None
+
+    def listMaps(self):
+        return [self.activeMap] if self.activeMap else []
+
+
+class _Mp(object):
+    project = None
+
+    @staticmethod
+    def ArcGISProject(name):
+        if not MP_PROJECT:
+            raise RuntimeError("no ArcGIS Pro project is open")
+        if _Mp.project is None:
+            _Mp.project = _Project()
+        return _Mp.project
+
+
+mp = _Mp()
+
+
+def reset_animation():
+    """Forget what the animation tests did."""
+    CREATED.clear()
+    FIELDS.clear()
+    INSERTED.clear()
+    LAYER_FILES[:] = []
+    CALLS[:] = []
+    _Mp.project = None

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"Village": "Touba", "CSI_CASE": "CSI-001", "MILDA_distribuees": 120, "Lon_dept": -16.92, "Lat_dept": 14.79, "Longitude_rep": -16.45, "Latitude_rep": 14.42}, "geometry": {"type": "Point", "coordinates": [-16.92, 14.79]}}]}
