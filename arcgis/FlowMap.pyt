@@ -87,7 +87,7 @@ def _load_core(path):
 # A new .pyt left beside an old flowmap_core.py loads without complaint and then
 # builds a page with the old rules - which is indistinguishable, from the user's
 # side, from a bug. Refuse the mix by name.
-CORE_VERSION = "6.5"
+CORE_VERSION = "6.6"
 
 CORE = None
 CORE_ERROR = ""
@@ -135,9 +135,9 @@ else:
 
 # The tool label is the heading of the Geoprocessing pane, so it is also the
 # one place where a user can see which build is installed: a screenshot of the
-# dialog says "6.5" or it does not. build-help.py reads this same string for
+# dialog says "6.6" or it does not. build-help.py reads this same string for
 # the XML documentation, so the label and the help cannot drift apart.
-TOOL_LABEL = "Build a flow map page (6.5)"
+TOOL_LABEL = "Build a flow map page (6.6)"
 
 PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
@@ -369,6 +369,50 @@ HELP = {
 }
 
 
+def _message(messages, text, level="message"):
+    """Write a line into the Geoprocessing messages, and never fail.
+
+    ArcGIS Pro hands execute() a Messages object whose methods are
+    addMessage, addWarningMessage and addErrorMessage. There is no
+    addWarningText, though the name reads as if there were: the stand-in this
+    toolbox is tested with used to accept it, so the call shipped, and the
+    first real run whose data produced a warning died with
+
+        AttributeError: MessagesObject: Get attribute: s does not exist
+
+    after the page had already been built. The names are tried in turn, and
+    the arcpy globals are the last resort, so a message is never worth a
+    failed run.
+    """
+    names = (
+        ("addWarningMessage", "addWarningText", "addWarning", "AddWarning")
+        if level == "warning"
+        else ("addMessage", "AddMessage")
+    )
+    for name in names:
+        method = getattr(messages, name, None)
+        if callable(method):
+            try:
+                method(text)
+                return True
+            except Exception:
+                continue
+    fallback = arcpy.AddWarning if level == "warning" else arcpy.AddMessage
+    try:
+        fallback(text)
+        return True
+    except Exception:
+        return False
+
+
+def _say(messages, text):
+    return _message(messages, text, "message")
+
+
+def _warn_text(messages, text):
+    return _message(messages, text, "warning")
+
+
 def _abool(value, default=True):
     """Pro hands booleans back as True, 'true', '1' or None."""
     if value is None or str(value).strip() == "":
@@ -392,7 +436,7 @@ class BuildFlowMapPage(object):
     def __init__(self):
         self.label = TOOL_LABEL
         self.description = (
-            "Version 6.5. Read a flow table, resolve the places, and write one HTML file "
+            "Version 6.6. Read a flow table, resolve the places, and write one HTML file "
             "that draws an animated flow map. The page works offline, needs no "
             "API key, and can export GIF, video, SHP, GeoJSON, GeoParquet and "
             "CSV. The flows can also be added to the current map as a "
@@ -1031,16 +1075,16 @@ class BuildFlowMapPage(object):
         except Exception:
             findings = []
 
-        messages.addMessage(
+        _say(messages, 
             "FlowMap %s - engine %s"
             % (CORE_VERSION, getattr(CORE, "__version__", "?"))
         )
-        messages.addMessage("Reading %s ..." % flows)
+        _say(messages, "Reading %s ..." % flows)
         try:
             rows = self._read_rows(flows, mapping)
         except arcpy.ExecuteError:
             raise
-        messages.addMessage("  %d rows" % len(rows))
+        _say(messages, "  %d rows" % len(rows))
 
         places = []
         if by_name.get("places") is not None and by_name["places"].value:
@@ -1049,7 +1093,7 @@ class BuildFlowMapPage(object):
                 self._text(by_name.get("places_name")),
                 self._text(by_name.get("places_group")),
             )
-            messages.addMessage("  %d places to look names up in" % len(places))
+            _say(messages, "  %d places to look names up in" % len(places))
 
         bounds = {}
         for role, name_param, label in (
@@ -1066,7 +1110,7 @@ class BuildFlowMapPage(object):
             bounds[role], tolerance = self._read_boundaries(
                 by_name[name_param].valueAsText, name_column
             )
-            messages.addMessage("  %d %s" % (len(bounds[role]), label))
+            _say(messages, "  %d %s" % (len(bounds[role]), label))
 
         title = self._text(by_name.get("title")) or self._title_from(flows)
         unit = self._text(by_name.get("unit"))
@@ -1104,9 +1148,9 @@ class BuildFlowMapPage(object):
             self._warn(findings, messages)
             raise arcpy.ExecuteError(str(err))
         for warning in warnings:
-            messages.addWarningText(warning)
+            _warn_text(messages, warning)
         if pairing:
-            messages.addWarningText(pairing)
+            _warn_text(messages, pairing)
 
         template = self._text(by_name.get("template")) or self._find_template()
         if not template or not os.path.isfile(template):
@@ -1121,7 +1165,7 @@ class BuildFlowMapPage(object):
         except Exception:
             pass
 
-        messages.addMessage(
+        _say(messages, 
             "Wrote %s - %d places, %d flows, %d day(s), %s %s."
             % (
                 out_html,
@@ -1132,13 +1176,13 @@ class BuildFlowMapPage(object):
                 dataset["meta"].get("unit") or "records",
             )
         )
-        messages.addMessage(
+        _say(messages, 
             "The page is one self-contained file: it opens in any browser, "
             "works offline, and exports GIF, video, SHP, GeoJSON, GeoParquet "
             "and CSV."
         )
         if json_path:
-            messages.addMessage("Also wrote %s" % json_path)
+            _say(messages, "Also wrote %s" % json_path)
 
         if by_name.get("add_animation") is not None and _abool(by_name["add_animation"].value):
             self._write_time_layer(dataset, folder, messages)
@@ -1156,7 +1200,7 @@ class BuildFlowMapPage(object):
             text = ""
         for line in (text or "").splitlines():
             if line.strip():
-                messages.addWarningText(line)
+                _warn_text(messages, line)
 
     @staticmethod
     def _open(path):
@@ -1403,13 +1447,13 @@ class BuildFlowMapPage(object):
                         [points, int(day), when, str(a[0]), str(b[0]), float(value)]
                     )
                     written += 1
-            messages.addMessage(
+            _say(messages, 
                 "Added the flows to a time-enabled layer: %s (%d lines)."
                 % (fc, written)
             )
             self._add_to_map(fc, folder, messages)
         except Exception as err:
-            messages.addWarningText(
+            _warn_text(messages, 
                 "The page is written, but the animation layer could not be built: "
                 "%s: %s" % (type(err).__name__, err)
             )
@@ -1442,14 +1486,14 @@ class BuildFlowMapPage(object):
                 maps = project.listMaps()
                 target = maps[0] if maps else None
             if target is None:
-                messages.addWarningText(
+                _warn_text(messages, 
                     "No map is open, so the layer was not added. Add %s to a map "
                     "by hand." % fc
                 )
                 return
             layer = target.addDataFromPath(fc)
         except Exception as err:
-            messages.addWarningText(
+            _warn_text(messages, 
                 "The layer was created but not added to the map (%s: %s). "
                 "Add %s to a map by hand." % (type(err).__name__, err, fc)
             )
@@ -1457,12 +1501,12 @@ class BuildFlowMapPage(object):
 
         enabled = self._enable_time(layer)
         if enabled:
-            messages.addMessage(
+            _say(messages, 
                 "Time is on for the layer: open the Time Slider on the map and "
                 "press play. The Animation tab exports it as a video."
             )
         else:
-            messages.addWarningText(
+            _warn_text(messages, 
                 "The layer is in the map but time could not be turned on by the "
                 'tool. Right-click the layer > Properties > Time and choose the '
                 '"WHEN" field as the start time.'
@@ -1470,7 +1514,7 @@ class BuildFlowMapPage(object):
         lyrx = os.path.join(folder, "FlowMap-flows.lyrx")
         try:
             arcpy.management.SaveToLayerFile(layer, lyrx)
-            messages.addMessage("Saved the layer file %s" % lyrx)
+            _say(messages, "Saved the layer file %s" % lyrx)
         except Exception:
             pass
 

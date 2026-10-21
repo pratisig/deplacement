@@ -39,6 +39,7 @@ POINTS = "/project/points"
 UNPLACEABLE = "/project/unplaceable"
 TEXT_VALUE = "/project/synthese_villages"
 SWAPPED = "/project/swapped"
+ONE_POINT = "/project/synthese_villages_one_point"
 
 CHECKS = []
 
@@ -179,6 +180,53 @@ def register_layers():
                 "Lat_dept": 14.70,
                 "Longitude_rep": -16.30,
                 "Latitude_rep": 14.55,
+            },
+        ],
+    )
+    # the field table, exactly: one point per row, so every flow starts where
+    # it ends and the build has a warning to report
+    stub.add_layer(
+        ONE_POINT,
+        [
+            "Village",
+            "Menages",
+            "Longitude_rep",
+            "Latitude_rep",
+            "Lon_dept",
+            "Lat_dept",
+        ],
+        [
+            {
+                "Village": "Dantchiao",
+                "Menages": 593,
+                "Longitude_rep": 9.09208,
+                "Latitude_rep": 12.87795,
+                "Lon_dept": 9.09208,
+                "Lat_dept": 12.87795,
+            },
+            {
+                "Village": "Garin Madja",
+                "Menages": 413,
+                "Longitude_rep": 9.07573,
+                "Latitude_rep": 12.90398,
+                "Lon_dept": 9.07573,
+                "Lat_dept": 12.90398,
+            },
+            {
+                "Village": "Kayaka",
+                "Menages": 374,
+                "Longitude_rep": 9.04356,
+                "Latitude_rep": 12.89652,
+                "Lon_dept": 9.04356,
+                "Lat_dept": 12.89652,
+            },
+            {
+                "Village": "Kioché",
+                "Menages": 337,
+                "Longitude_rep": 9.03288,
+                "Latitude_rep": 12.85948,
+                "Lon_dept": 9.03288,
+                "Lat_dept": 12.85948,
             },
         ],
     )
@@ -397,6 +445,58 @@ def column_checks(tool, params, by_name, json_folder):
         "a point layer still lists its own columns",
         by_name["o_name"].filter.list == [""] + ["SITE", "HOUSEHOLDS", "DATE"],
         by_name["o_name"].filter.list,
+    )
+
+
+def warning_path_checks(module, out_dir):
+    """A run whose data produces a warning must not die on the warning.
+
+    The field traceback:
+
+        File "FlowMap.pyt", line 1107, in execute
+          messages.addWarningText(warning)
+        AttributeError: MessagesObject: Get attribute: s does not exist
+
+    ``addWarningText`` is not part of the Messages object ArcGIS Pro hands to
+    execute(); the stand-in accepted it, so nothing caught it until a real
+    table produced the first warning - after the run had already read the
+    rows. The page was never written.
+    """
+    tool = module.Toolbox().tools[0]()
+    params = tool.getParameterInfo()
+    by_name = {p.name: p for p in params}
+    setp(by_name, "flows", ONE_POINT)
+    setp(by_name, "out_folder", out_dir)
+    setp(by_name, "page_name", "one-point.html")
+    setp(by_name, "open_page", False)
+    setp(by_name, "add_animation", False)
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    check(
+        "the identical coordinate pairs are warned about before the run",
+        bool(by_name["d_lon"].warningMessage),
+        by_name["d_lon"].warningMessage,
+    )
+    stub.WARNINGS[:] = []
+    stub.MESSAGES[:] = []
+    raised = None
+    try:
+        tool.execute(params, stub.Messages())
+    except Exception as err:  # noqa: BLE001 - the point is that this is empty
+        raised = "%s: %s" % (type(err).__name__, err)
+    check("a warning never fails the run", raised is None, raised)
+    check(
+        "the warning reaches the messages",
+        any("start and end at the same point" in line for line in stub.WARNINGS),
+        stub.WARNINGS,
+    )
+    check(
+        "and the page is still written",
+        os.path.isfile(os.path.join(out_dir, "one-point.html")),
+    )
+    check(
+        "no call uses a method the Messages object does not have",
+        not re.search(r"messages\s*\.\s*addWarningText\s*\(", open(os.path.join(ROOT, "arcgis", "FlowMap.pyt"), encoding="utf-8").read()),
     )
 
 
@@ -839,6 +939,11 @@ def run(module, out_html, out_json):
     except stub.ExecuteError as err:
         raised = str(err)
     check("running the mix says what to do", "Unzip the whole FlowMap folder" in raised, raised)
+
+    # ---- a warning must not kill the run ------------------------------
+    stub.reset()
+    register_layers()
+    warning_path_checks(module, out_dir)
 
     # ---- the table that failed in the field ----------------------------
     stub.reset()

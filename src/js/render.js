@@ -89,6 +89,27 @@ function draw(t) {
       ctx.stroke();
     }
   }
+  {
+    // The records counted inside a place travel round its ring. Without them a
+    // table whose every row is one point - a synthesis per village, which has
+    // no movement to draw - is a field of still dots, and that reads as a page
+    // that does not work. This is the same idea as the sparks on a line, one
+    // ring closer in.
+    ctx.fillStyle = C.spark;
+    for (const n of act) {
+      if (!(n.within > 0)) continue;
+      const dim = hv && !nb.has(n.i);
+      const ring = n.r + 3.2;
+      const count = Math.min(3, 1 + Math.floor(Math.log2(1 + n.within) / 2));
+      ctx.globalAlpha = dim ? 0.12 : 0.85;
+      for (let k = 0; k < count; k++) {
+        const a = t * 0.0009 * (0.7 + ((n.i * 7 + k * 13) % 10) / 12) + k * 2.09 + n.i * 1.7;
+        ctx.beginPath();
+        ctx.arc(n.rx + Math.cos(a) * ring, n.ry + Math.sin(a) * ring, 1.5, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+  }
   if (hv) {
     ctx.globalAlpha = 1;
     ctx.strokeStyle = C.ink;

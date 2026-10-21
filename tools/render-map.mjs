@@ -235,14 +235,35 @@ for (const l of links) {
   }
 }
 
-/* ------------------------------------------------------- points and labels */
+/* ------------------------------------------------------- points and labels
+   A table with one point per row has no line to draw: its records are counted
+   inside each place, and the page shows them travelling round the dot's ring.
+   Drawing that ring here is what makes such a page visible in this check at
+   all - "flows: 0" with nothing else looked like a failure. */
 let placed = 0;
+let rings = 0;
 for (const n of T.N()) {
   const x = px(n.lon),
     y = py(n.lat);
   canvas.disc(x, y, 3, [57, 135, 229], 1);
   canvas.disc(x, y, 1.6, [220, 240, 255], 1);
   placed++;
+  if (n.within > 0) {
+    rings++;
+    const r = 6.2;
+    for (let a = 0; a < 360; a += 10) {
+      const t0 = (a * Math.PI) / 180,
+        t1 = ((a + 10) * Math.PI) / 180;
+      canvas.line(
+        x + r * Math.cos(t0),
+        y + r * Math.sin(t0),
+        x + r * Math.cos(t1),
+        y + r * Math.sin(t1),
+        [255, 236, 203],
+        0.7,
+      );
+    }
+  }
 }
 
 const report = {
@@ -253,6 +274,7 @@ const report = {
   governorates: Object.keys(T.GOVPATH()).length,
   points: placed,
   flows: links.length,
+  rings,
   frame: {
     x: [Math.min(...T.N().map(n => px(n.lon))), Math.max(...T.N().map(n => px(n.lon)))].map(
       Math.round,

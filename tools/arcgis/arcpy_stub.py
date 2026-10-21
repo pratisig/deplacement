@@ -202,19 +202,24 @@ def SetParameterAsText(index, value):
 
 
 class Messages(object):
-    """The object ArcGIS hands to execute() — addMessage/addWarningText."""
+    """The object ArcGIS hands to execute().
+
+    Only the three methods Pro really has, and nothing else: this class used
+    to offer ``addWarningText`` (which does not exist in arcpy) because the
+    toolbox called it, so a whole build shipped with a warning path that
+    raised ``AttributeError: MessagesObject: Get attribute: s does not exist``
+    the first time real data produced a warning. An attribute that is not in
+    the real API raises here too, and the test fails before the user does.
+    """
 
     def addMessage(self, line):
         AddMessage(line)
 
-    def addWarningText(self, line):
+    def addWarningMessage(self, line):
         AddWarning(line)
 
     def addErrorMessage(self, line):
         AddError(line)
-
-    def addWarning(self, line):
-        AddWarning(line)
 
 
 def add_layer(name, fields, rows, shape_type=None):

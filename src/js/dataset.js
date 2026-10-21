@@ -137,12 +137,23 @@ function applyMeta() {
   const m = D.meta || {};
   const title = m.title || 'Flow map';
   document.title = title;
+  // A table with one point per row has no line to draw: saying "each line a
+  // flow between two of them" over a field of dots is the sentence that made
+  // the page look broken. The dots are then records inside a place, and the
+  // subtitle says so.
+  const insideOnly = E.length > 0 && E.every(e => e[1] === e[2]);
   $('#title').textContent = title;
   $('#subtitle').textContent =
     m.subtitle ||
-    'Each dot is one ' +
-      LBL.node +
-      ', each line a flow between two of them. Drag the layout slider to move between true geography and a network view.';
+    (insideOnly
+      ? 'Each dot is one ' +
+        LBL.node +
+        '; the ' +
+        LBL.unit +
+        ' counted inside it travel round its ring. Drag the layout slider to move between true geography and a network view.'
+      : 'Each dot is one ' +
+        LBL.node +
+        ', each line a flow between two of them. Drag the layout slider to move between true geography and a network view.');
   $('#lgUnit').textContent = LBL.unit;
   $('#lgNode').textContent = LBL.node;
   const th = $('#tbHead');

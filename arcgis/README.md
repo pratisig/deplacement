@@ -119,6 +119,10 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
 - **One-place rows.** A point layer is a table of places, not of pairs: each row
   becomes a record *within* that place (the "inside" column of the page's
   table).
+- **What the page says when there is no line.** A table with one point per row
+  has no movement to draw, and the page says so in its subtitle — the
+  households counted *inside* each place travel round that place's ring —
+  instead of promising "each line a flow" over a field of dots.
 - **One name, two coordinate pairs.** An empty *Origin name field* does not copy
   the destination's name onto the origin: the two ends keep their own
   coordinates, the unnamed end is labelled by its position, and the flow stays a
@@ -129,8 +133,8 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
   the tool warns with the two column pairs by name, the dialog shows the same
   warning next to the coordinate fields, and the page repeats it under the map.
 - **Which build made the page.** The tool is labelled `Build a flow map page
-  (6.5)`, each run opens with `FlowMap 6.5 - engine 6.5`, and the page's source
-  line ends with `Built with FlowMap 6.5`. A toolbox left beside an older
+  (6.6)`, each run opens with `FlowMap 6.6 - engine 6.6`, and the page's source
+  line ends with `Built with FlowMap 6.6`. A toolbox left beside an older
   `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
@@ -197,7 +201,7 @@ node tools/render-map.mjs --html demo.html --out docs/arcgis-demo.png
 # a page from a spec file
 python3 flowmap_core.py build --input spec.json --out page.html --json dataset.json
 
-# the checks (57 of them, no dependencies)
+# the checks (59 of them, no dependencies)
 python3 flowmap_core.py selftest
 ```
 
@@ -267,11 +271,11 @@ tested.
 
 `npm test` runs `test/arcgis.test.mjs`, which:
 
-- runs `flowmap_core.py selftest` (57 checks: names, dates, geometry, the
+- runs `flowmap_core.py selftest` (59 checks: names, dates, geometry, the
   dataset, the page, and what a column holds — identifiers, metres, readable
   dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 105 checks): the 28 parameters, the drop-down
+  `tools/arcgis/toolcheck.py`, 110 checks): the 28 parameters, the drop-down
   lists including a JSON layer, the folder and page name, the guessing on the
   table that failed in the field, the swap of two mislabeled coordinate
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,

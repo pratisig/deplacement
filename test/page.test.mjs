@@ -347,7 +347,7 @@ test('a table whose flows never leave their place says so under the map', () => 
   // Two places, both flows inside a place: the page has dots and no line, so
   // it must say why instead of looking broken.
   const p = pageWith({
-    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.6' },
     nodes: [
       ['A', '', 9.0, 12.0],
       ['B', '', 9.1, 12.1],
@@ -365,7 +365,7 @@ test('a table whose flows never leave their place says so under the map', () => 
 
 test('an unnamed origin keeps its own dot, so the flow is a line', () => {
   const p = pageWith({
-    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.6' },
     nodes: [
       ['9.000, 12.000', '', 9.0, 12.0],
       ['Dantchiao', '', 9.1, 12.1],
@@ -381,11 +381,37 @@ test('an unnamed origin keeps its own dot, so the flow is a line', () => {
 
 test('the page names the build that wrote it', () => {
   const p = pageWith({
-    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 6.6' },
     nodes: [['A', '', 9.0, 12.0]],
     edges: [[0, 0, 0, 1]],
     maxDay: 0,
     total: 1,
   });
-  assert.match(p.els.noteSource.textContent, /Built with FlowMap 6\.5/);
+  assert.match(p.els.noteSource.textContent, /Built with FlowMap 6\.6/);
+});
+
+test('a table with one point per row shows its records moving round the dot', () => {
+  const p = pageWith({
+    meta: { title: 'Villages', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.6' },
+    nodes: [
+      ['A', '', 9.0, 12.0],
+      ['B', '', 9.1, 12.1],
+    ],
+    edges: [
+      [0, 0, 0, 10],
+      [0, 1, 1, 5],
+    ],
+    maxDay: 0,
+    total: 15,
+  });
+  // the subtitle must not promise lines a table of one point per row cannot give
+  assert.match(p.els.subtitle.textContent, /counted inside/);
+  assert.doesNotMatch(p.els.subtitle.textContent, /each line a flow/);
+  // and something must move: every active place gets a ring with sparks on it
+  const arcs = p.ctx().__calls.arc;
+  assert.ok(arcs >= 2 * p.T.getAct().length, 'ring sparks drawn (' + arcs + ' arcs)');
+  assert.ok(
+    p.T.getAct().every(n => n.within > 0),
+    'the records are inside the places',
+  );
 });

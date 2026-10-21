@@ -36,7 +36,7 @@ import re
 import sys
 import unicodedata
 
-__version__ = "6.5"
+__version__ = "6.6"
 
 # --------------------------------------------------------------------- names
 
@@ -1214,11 +1214,22 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
 
     meta = dict(meta or {})
     meta.setdefault("title", "Flow map")
-    meta.setdefault(
-        "subtitle",
-        "Each dot is one place, each line a flow between two of them. "
-        "Drag the layout slider to move between true geography and a network view.",
-    )
+    meta.setdefault("unit", guess_unit_label(mapping.get("value") or "") or "records")
+    if loops and loops == len(edges):
+        # one point per row: there is no line, and a subtitle promising one is
+        # the sentence that makes a working page look broken
+        meta.setdefault(
+            "subtitle",
+            "Each dot is one place, and the %s counted inside it travel round "
+            "its ring. Drag the layout slider to move between true geography "
+            "and a network view." % meta["unit"],
+        )
+    else:
+        meta.setdefault(
+            "subtitle",
+            "Each dot is one place, each line a flow between two of them. "
+            "Drag the layout slider to move between true geography and a network view.",
+        )
     meta.setdefault("unit", guess_unit_label(mapping.get("value") or "") or "records")
     meta.setdefault("nodeLabel", "place")
     meta.setdefault("groupLabel", "group" if not (admin1 or admin2) else "area")
@@ -1648,6 +1659,16 @@ def selftest():
         "the open dialog names the two coordinate pairs",
         any(f["role"] == "dLon" and "same" in f["text"] for f in diagnose_mapping(flat, ONE_NAME)),
         diagnose_mapping(flat, ONE_NAME),
+    )
+    check(
+        "a page of records inside places does not promise lines",
+        "travel round its ring" in flat_ds["meta"]["subtitle"],
+        flat_ds["meta"]["subtitle"],
+    )
+    check(
+        "a page with real movement still says each line is a flow",
+        "each line a flow" in two["meta"]["subtitle"],
+        two["meta"]["subtitle"],
     )
     check(
         "the page is stamped with the build that wrote it",
