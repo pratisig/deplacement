@@ -36,7 +36,7 @@ import re
 import sys
 import unicodedata
 
-__version__ = "6.7"
+__version__ = "6.8"
 
 # --------------------------------------------------------------------- names
 

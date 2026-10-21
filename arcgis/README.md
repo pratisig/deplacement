@@ -100,12 +100,24 @@ therefore re-asserted at the end of *every* callback — `getParameterInfo`,
 the table parameter carries a warning naming it, instead of leaving a box for
 you to fill by hand.
 
-**Nothing is guessed from a column name alone.** The tool samples 200 rows and
-judges the content: a column of identifiers is never a place name, a text column
-is never a value, coordinates must be in degrees, and a date column must read as
-a date. What it finds is shown under the parameter while the dialog is open —
+**No column field is ever filled in for you.** Choosing the table fills the
+*twelve lists* with its columns and leaves every field empty: the choice is
+yours to make, and a guess is invisible, so a wrong guess reads as your own
+decision. (That is how a run once went out with the destination's name on both
+ends of every flow.) A column you pick is never replaced by a later guess.
+
+What the tool does instead is **read your choice and say what it means**: it
+samples 200 rows and judges the content, so a column of identifiers is reported
+as a place name, a text column is reported as a value, coordinates in metres are
+reported as not being degrees, and a date column that holds no date is reported
+as such. What it finds appears under the parameter while the dialog is open —
 *The value column "CSI_CASE" holds no number that can be read (examples:
-"CSI-001", "CSI-014")* — and repeated as warnings if a build fails.
+"CSI-001", "CSI-014")* — and is repeated as warnings if a build fails.
+
+**Nothing chosen yet is not an error.** Choosing a table and pressing Run
+without picking a column says which columns are missing and where they are,
+instead of "the table has no data rows"; the pane shows the same thing as a
+warning. A point layer needs no column at all: its geometry is the position.
 
 **Coordinates are checked against the numbers.** If the column called
 longitude holds what are plainly latitudes, the tool says so and swaps them
@@ -143,18 +155,19 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
   households counted *inside* each place travel round that place's ring —
   instead of promising "each line a flow" over a field of dots.
 - **One name, two coordinate pairs.** A table with a single name column and two
-  coordinate pairs gets its *Origin name field* left empty by the guess: the
-  origin keeps its own position and is labelled by it, and the flow stays a line
-  between two places. Copying the destination's name onto that origin would weld
-  the two ends into one dot — 36 rows, 36 dots, not one line. A column you pick
-  yourself is never undone.
+  coordinate pairs is best given an empty *Origin name field*: that end keeps its
+  own position and is labelled by it, and the flow stays a line between two
+  places. Putting the same column in both name fields also works — the two
+  positions must differ for the line to exist. What must not happen is one dot
+  standing for both ends: the page would then count records inside a place
+  instead of drawing movement.
 - **When the two ends really are one point.** If the origin and destination
   coordinates match in every row, the page has no line to draw. It says so:
   the tool warns with the two column pairs by name, the dialog shows the same
   warning next to the coordinate fields, and the page repeats it under the map.
 - **Which build made the page.** The tool is labelled `Build a flow map page
-  (6.7)`, each run opens with `FlowMap 6.7 - engine 6.7`, and the page's source
-  line ends with `Built with FlowMap 6.7`. A toolbox left beside an older
+  (6.8)`, each run opens with `FlowMap 6.8 - engine 6.8`, and the page's source
+  line ends with `Built with FlowMap 6.8`. A toolbox left beside an older
   `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
@@ -295,12 +308,13 @@ tested.
   dataset, the page, and what a column holds — identifiers, metres, readable
   dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 135 checks): the 28 parameters, the column
+  `tools/arcgis/toolcheck.py`, 144 checks): the 28 parameters, the column
   drop-downs (a placeholder before any table, the table's own columns after,
   a filter Pro reset to "Any" repaired on the next callback, a placeholder
-  never read as a field), the lists including a JSON layer, the folder and
-  page name, the guessing on the
-  table that failed in the field, the swap of two mislabeled coordinate
+  never read as a field, no field filled in automatically, and a clear message
+  when Run is pressed with nothing chosen), the lists including a JSON layer, the folder and
+  page name, the fields offered but never filled in, the
+  old table that failed in the field, the swap of two mislabeled coordinate
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
   enabled, `.lyrx`), a new toolbox left beside an old engine, and every failure
@@ -320,8 +334,7 @@ tested.
 
 What that cannot do is run real ArcGIS Pro: the stand-in follows the documented
 arcpy API, so **a first run on your machine is still the acceptance test**.
-Things worth a look on that first run: your field names against the guessed
-mapping, the group field if your table has one, and the outline detail if the
+Things worth a look on that first run: the columns you picked, the group field if your table has one, and the outline detail if the
 page feels heavy.
 
 ## Known limitations

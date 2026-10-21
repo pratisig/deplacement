@@ -87,7 +87,7 @@ def _load_core(path):
 # A new .pyt left beside an old flowmap_core.py loads without complaint and then
 # builds a page with the old rules - which is indistinguishable, from the user's
 # side, from a bug. Refuse the mix by name.
-CORE_VERSION = "6.7"
+CORE_VERSION = "6.8"
 
 CORE = None
 CORE_ERROR = ""
@@ -135,9 +135,9 @@ else:
 
 # The tool label is the heading of the Geoprocessing pane, so it is also the
 # one place where a user can see which build is installed: a screenshot of the
-# dialog says "6.7" or it does not. build-help.py reads this same string for
+# dialog says "6.8" or it does not. build-help.py reads this same string for
 # the XML documentation, so the label and the help cannot drift apart.
-TOOL_LABEL = "Build a flow map page (6.7)"
+TOOL_LABEL = "Build a flow map page (6.8)"
 
 PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
@@ -257,7 +257,8 @@ HELP = {
         "The table that holds one row per flow: where it starts, where it goes, "
         "and optionally how much, when, and in which group. A layer, a feature "
         "class, a standalone table, a CSV, a JSON or a GeoJSON all work. "
-        "Pick it first: every column list below is filled from it."
+        "Pick it first: every column list below is filled with its columns, "
+        "and nothing is chosen for you - each field is yours to pick."
     ),
     "out_folder": (
         "The folder the page is written to. Browse to it: a folder you can "
@@ -269,19 +270,20 @@ HELP = {
         "empty for index.html. A name without .html gets it added."
     ),
     "o_name": (
-        "The column holding the place a flow starts from. When one column names "
-        "the village and the origins and destinations are told apart by their "
-        "coordinates, choose that column here AND in the destination field: the "
-        "page then keeps both ends (two positions, one name). Not needed at all "
-        "when a places layer or an outlines layer can locate the names."
+        "The column holding the place a flow starts from. Leave it empty when "
+        "the table has no separate column for it: the origin is then labelled "
+        "by its coordinates, which is what it is, and the flow stays a line "
+        "between two points. Not needed at all when a places layer or an "
+        "outlines layer can locate the names."
     ),
     "d_name": (
         "The column holding the place a flow goes to. Empty: the origin column "
-        "is used for both ends, and each row counts as a record inside that "
-        "place. When the origins and destinations are separated by their "
-        "coordinates rather than by their names, put the same column here as "
-        "in the origin field - the two positions stay two dots, so the flow is "
-        "drawn instead of collapsing."
+        "is used for both ends, and a row whose two coordinate pairs are the "
+        "same point counts as a record inside that place. When the origins and "
+        "destinations are told apart by their coordinates rather than by their "
+        "names, either put the same column in both name fields - the two "
+        "positions stay two dots - or leave the origin name empty: its end is "
+        "then labelled by its position and the flow is still a line."
     ),
     "value": (
         "The column holding the quantity to draw - households, people, cases, "
@@ -452,7 +454,7 @@ class BuildFlowMapPage(object):
     def __init__(self):
         self.label = TOOL_LABEL
         self.description = (
-            "Version 6.7. Read a flow table, resolve the places, and write one HTML file "
+            "Version 6.8. Read a flow table, resolve the places, and write one HTML file "
             "that draws an animated flow map. The page works offline, needs no "
             "API key, and can export GIF, video, SHP, GeoJSON, GeoParquet and "
             "CSV. The flows can also be added to the current map as a "
@@ -462,7 +464,6 @@ class BuildFlowMapPage(object):
         self._table = None
         self._sample = None
         self._sample_for = None
-        self._guessed = None
         self._findings = None
         self._columns_cache = {}
 
@@ -929,45 +930,6 @@ class BuildFlowMapPage(object):
                 pass
         self._force_value_list(param)
 
-    def _leave_origin_unnamed(self, by_name, sample):
-        """Do not weld the destination's name onto an origin at another point.
-
-        A table with one name column and two coordinate pairs is the shape that
-        produced the invisible flows: the origin borrowed the destination's
-        name, both ends resolved to one dot, and 36 rows gave 36 dots and no
-        line. When the sample shows that the two pairs differ, the origin is
-        left unnamed - it is labelled by its position, which is what it is -
-        and the flow stays a line between two places.
-
-        A choice the user made is never undone: ``altered`` means a human
-        picked that column, and a human outranks a guess.
-        """
-        if not CORE or not sample:
-            return
-        o_name = by_name.get("o_name")
-        d_name = by_name.get("d_name")
-        if o_name is None or d_name is None or o_name.altered:
-            return
-        mapping = self._mapping_from(by_name)
-        if not mapping.get("oName") or mapping.get("oName") != mapping.get("dName"):
-            return
-        if not all(mapping.get(key) for key in ("oLon", "oLat", "dLon", "dLat")):
-            return
-        for row in sample:
-            x1 = CORE.to_number(row.get(mapping["oLon"]))
-            y1 = CORE.to_number(row.get(mapping["oLat"]))
-            x2 = CORE.to_number(row.get(mapping["dLon"]))
-            y2 = CORE.to_number(row.get(mapping["dLat"]))
-            if None in (x1, y1, x2, y2):
-                continue
-            if abs(x1 - x2) > 1e-4 or abs(y1 - y2) > 1e-4:
-                try:
-                    o_name.value = None
-                except Exception:
-                    pass
-                self._force_value_list(o_name)
-                return
-
     def _apply_pairing(self, mapping, sample):
         """Swap the destination columns if the numbers say they are crossed."""
         if not sample or not CORE:
@@ -1004,7 +966,6 @@ class BuildFlowMapPage(object):
             self._table = key
             self._sample = None
             self._sample_for = None
-            self._guessed = None
             self._findings = None
 
         # 1. every column drop-down follows its dataset
@@ -1017,26 +978,20 @@ class BuildFlowMapPage(object):
             return
         sample = self._sample_for_table(flows.value, names)
 
-        # 2. first sight of this table: prefill only what is still untouched
-        if self._guessed is None:
-            guessed = CORE.guess_mapping(names, sample)
-            for role, column in guessed.items():
-                if role == "swapDest" or not column:
-                    continue
-                param = by_name.get(PARAM_FOR_ROLE.get(role, ""))
-                if param is None or param.altered:
-                    continue
-                if column in names:
-                    param.value = column
-            self._guessed = guessed
-            title = by_name.get("title")
-            if title is not None and not title.altered and not title.value:
-                # valueAsText, never value: for a layer, value is an ArcGIS
-                # object whose str() is "<MappingTableObject object at 0x...>"
-                title.value = self._title_from(self._text(flows))
-
-        # 2b. one name column does not name both ends when they are two points
-        self._leave_origin_unnamed(by_name, sample)
+        # 2. the title defaults to the table's name, and nothing else does.
+        #
+        # The column fields are deliberately NOT filled in. They used to be
+        # guessed from the column names and their contents, which is how a
+        # run once went out with the destination's name on both ends of every
+        # flow: a guess is invisible, so a wrong guess looks like the user's
+        # own choice. The lists are offered, the user picks. What the tool
+        # still does is *read* a choice and say what it means - see the
+        # findings below and the warnings at build time.
+        title = by_name.get("title")
+        if title is not None and not title.altered and not title.value:
+            # valueAsText, never value: for a layer, value is an ArcGIS
+            # object whose str() is "<MappingTableObject object at 0x...>"
+            title.value = self._title_from(self._text(flows))
 
         # 3. the value column decides what the unit is called, when unset
         unit = by_name.get("unit")
@@ -1146,6 +1101,17 @@ class BuildFlowMapPage(object):
             elif finding.get("level") == "warning":
                 param.setWarningMessage(finding.get("text") or "")
 
+        # nothing chosen yet: a warning, not an error - the pane is not broken,
+        # it is empty, and the lists below it hold the answer
+        chosen = self._mapping_from(by_name)
+        if not any(
+            chosen.get(role) for role in ("oName", "dName", "oLon", "oLat", "dLon", "dLat")
+        ) and not self._is_points(flows.value):
+            flows.setWarningMessage(
+                "No column chosen yet: pick them from the lists below. The "
+                "place names, or the coordinates, are the least the page needs."
+            )
+
         # can these names be put on a map at all?
         coords = all(self._text(by_name.get(name)) for name in ("o_lon", "o_lat"))
         lookup = any(
@@ -1198,7 +1164,25 @@ class BuildFlowMapPage(object):
                 raise arcpy.ExecuteError("The output folder could not be created: %s" % err)
         out_html = self._page_path(folder, self._text(by_name.get("page_name")))
 
+        # Nothing chosen yet is a thing a person does - press Run on a fresh
+        # pane - and "The table has no data rows" is not an answer to it.
         mapping = self._mapping_from(by_name)
+        located_by_columns = any(
+            mapping.get(role) for role in ("oName", "dName", "oLon", "oLat", "dLon", "dLat")
+        )
+        located_by_layer = any(
+            by_name.get(name) is not None and by_name[name].value
+            for name in ("places", "bounds_fine", "bounds_coarse")
+        )
+        if not located_by_columns and not located_by_layer and not self._is_points(flows):
+            raise arcpy.ExecuteError(
+                "No column is chosen yet, so there is nothing to place on the "
+                "map. Pick the columns in the drop-downs below the table: the "
+                "place names, or the longitude and latitude, or choose a places "
+                "layer under 'Places and outlines'. Every list holds the "
+                "columns of the table you chose."
+            )
+
         names = self._columns_of(flows)
         sample = self._sample_for_table(flows, names) if names else []
         pairing = self._apply_pairing(mapping, sample)
@@ -1208,7 +1192,8 @@ class BuildFlowMapPage(object):
         except Exception:
             findings = []
 
-        _say(messages, 
+        _say(
+            messages,
             "FlowMap %s - engine %s"
             % (CORE_VERSION, getattr(CORE, "__version__", "?"))
         )

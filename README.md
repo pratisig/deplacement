@@ -29,9 +29,9 @@ The table is one row per flow:
 
 * **CSV, TSV, semicolon- or pipe-separated, a JSON array of rows, or a GeoJSON
   FeatureCollection.** The delimiter and the encoding are detected.
-* **Columns are detected from the header row** — origin/destination, coordinates,
-  a date or a day number, and a value — and you can correct every guess in the
-  dialog before building the map. Headers in English, French or Spanish are
+* **Columns are detected from the header row** of a CSV you load in the page —
+  origin/destination, coordinates, a date or a day number, and a value — and you
+  can correct every choice in the dialog before building the map. Headers in English, French or Spanish are
   recognised (`origine`, `ménages`, `destino`, `fecha`, …).
 * **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
   up to two levels). Places are then matched to areas by name — accents, casing
@@ -137,13 +137,13 @@ the timeline, the exports, all of it.
 
 ```
 Insert > Toolbox > Add Toolbox…   pick FlowMap.pyt
-Flow map > Build a flow map page (6.7)   choose your layers
+Flow map > Build a flow map page (6.8)   choose your layers
 ```
 
 The version is in the tool's own title on purpose: it is the one place where a
 screenshot of the pane says which build is installed. A toolbox left beside an
 older `flowmap_core.py` refuses to run instead of quietly building the old page,
-and every page ends its source line with `Built with FlowMap 6.7`.
+and every page ends its source line with `Built with FlowMap 6.8`.
 
 Everything that decides what the page shows lives in `arcgis/flowmap_core.py`,
 which imports nothing but the standard library, so it runs (and is tested)

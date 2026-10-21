@@ -391,18 +391,50 @@ def column_checks(tool, params, by_name, json_folder):
         and getattr(by_name["places_name"].filter, "type", None) == "ValueList",
         (by_name["places_name"].filter.list, by_name["places_name"].filter.type),
     )
-    check("the origin field is guessed from the column names", by_name["o_name"].value == "ORIGIN", by_name["o_name"].value)
-    check("the destination field too", by_name["d_name"].value == "DESTINATION", by_name["d_name"].value)
-    check("the value field too", by_name["value"].value == "HOUSEHOLDS", by_name["value"].value)
-    check("the date field too", by_name["date"].value == "DATE", by_name["date"].value)
-    check("the guessed columns are inside the list", by_name["value"].value in by_name["value"].filter.list)
+    # the fields are OFFERED, never filled in: a guess is invisible, so a wrong
+    # guess reads as the user's own choice - and that is how a run once went
+    # out with the destination's name on both ends of every flow
+    check(
+        "choosing a table fills no column field in",
+        all(
+            by_name[name].value in (None, "")
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].value for name in ("o_name", "d_name", "value", "date")},
+    )
+    check(
+        "but every column of the table is offered in each of them",
+        all(
+            by_name[name].filter.list
+            == [""] + ["ORIGIN", "DESTINATION", "HOUSEHOLDS", "DATE", "REGION"]
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].filter.list for name in ("o_name", "value", "date")},
+    )
+    # and a choice is the user's: it survives every later callback
+    setp(by_name, "date", "REGION")
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    check(
+        "a column the user picked is kept, not replaced by a guess",
+        by_name["date"].value == "REGION",
+        by_name["date"].value,
+    )
+    setp(by_name, "date", None)
     check(
         "the title defaults to the table name, cleaned up",
         str(by_name["title"].value or "").lower() == "flows",
         by_name["title"].value,
     )
     check(
-        "the unit is deduced from the value column",
+        "the unit stays empty until a value column is chosen",
+        str(by_name["unit"].value or "") == "",
+        by_name["unit"].value,
+    )
+    setp(by_name, "value", "HOUSEHOLDS")
+    tool.updateParameters(params)
+    check(
+        "and is deduced once one is",
         str(by_name["unit"].value or "").lower() == "households",
         by_name["unit"].value,
     )
@@ -435,14 +467,15 @@ def column_checks(tool, params, by_name, json_folder):
             by2["o_name"].filter.list,
         )
         check(
-            "and its columns are guessed, not typed",
-            by2["o_name"].value == "Village" and by2["value"].value == "MILDA_distribuees",
-            (by2["o_name"].value, by2["value"].value),
+            "and its column fields are offered, not filled in",
+            all(by2[name].value in (None, "") for name in ("o_name", "d_name", "value", "date")),
+            {name: by2[name].value for name in ("o_name", "value")},
         )
         check(
-            "the coordinate columns are pre-filled for the JSON layer",
-            (by2["o_lon"].value, by2["d_lon"].value) == ("Lon_dept", "Longitude_rep"),
-            (by2["o_lon"].value, by2["d_lon"].value),
+            "both coordinate pairs are offered for the JSON layer",
+            "Lon_dept" in by2["o_lon"].filter.list
+            and "Longitude_rep" in by2["d_lon"].filter.list,
+            (by2["o_lon"].filter.list, by2["d_lon"].filter.list),
         )
     finally:
         stub.env.workspace = previous
@@ -609,6 +642,16 @@ def warning_path_checks(module, out_dir):
     params = tool.getParameterInfo()
     by_name = {p.name: p for p in params}
     setp(by_name, "flows", ONE_POINT)
+    tool.updateParameters(params)
+    for name, column in (
+        ("d_name", "Village"),
+        ("value", "Menages"),
+        ("o_lon", "Longitude_rep"),
+        ("o_lat", "Latitude_rep"),
+        ("d_lon", "Lon_dept"),
+        ("d_lat", "Lat_dept"),
+    ):
+        setp(by_name, name, column)
     setp(by_name, "out_folder", out_dir)
     setp(by_name, "page_name", "one-point.html")
     setp(by_name, "open_page", False)
@@ -643,32 +686,98 @@ def warning_path_checks(module, out_dir):
     )
 
 
+def nothing_chosen_checks(module, out_dir):
+    """Press Run on a table with no column picked: say so, do not crash.
+
+    Since the tool no longer fills the column fields in, this is now the first
+    thing a person can do with a fresh pane. "The table has no data rows" would
+    be true and useless; the message has to point at the drop-downs.
+    """
+    tool = module.Toolbox().tools[0]()
+    params = tool.getParameterInfo()
+    by_name = {p.name: p for p in params}
+    setp(by_name, "flows", FLOWS)
+    setp(by_name, "out_folder", out_dir)
+    setp(by_name, "page_name", "nothing.html")
+    setp(by_name, "open_page", False)
+    setp(by_name, "add_animation", False)
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    check(
+        "a table with no column chosen is only a warning, not an error",
+        bool(by_name["flows"].warningMessage)
+        and not by_name["flows"].errorMessage
+        and not any(p.errorMessage for p in params),
+        (by_name["flows"].warningMessage, [p.name for p in params if p.errorMessage]),
+    )
+    check(
+        "and the warning points at the drop-downs",
+        "column" in str(by_name["flows"].warningMessage).lower(),
+        by_name["flows"].warningMessage,
+    )
+    raised = ""
+    try:
+        tool.execute(params, stub.Messages())
+    except stub.ExecuteError as err:
+        raised = str(err)
+    check(
+        "running it says which columns are missing, not 'no data rows'",
+        "No column is chosen" in raised and "drop-down" in raised,
+        raised,
+    )
+    check(
+        "and nothing is written",
+        not os.path.isfile(os.path.join(out_dir, "nothing.html")),
+    )
+
+    # a point layer needs no column at all: its geometry is the position
+    tool2 = module.Toolbox().tools[0]()
+    params2 = tool2.getParameterInfo()
+    by2 = {p.name: p for p in params2}
+    setp(by2, "flows", POINTS)
+    setp(by2, "out_folder", out_dir)
+    setp(by2, "page_name", "points-bare.html")
+    setp(by2, "open_page", False)
+    setp(by2, "add_animation", False)
+    tool2.updateParameters(params2)
+    tool2.updateMessages(params2)
+    raised = ""
+    try:
+        tool2.execute(params2, stub.Messages())
+    except stub.ExecuteError as err:
+        raised = str(err)
+    check("a point layer builds with no column chosen at all", raised == "", raised)
+    check(
+        "and writes its page",
+        os.path.isfile(os.path.join(out_dir, "points-bare.html")),
+    )
+
+
 def failing_table_checks(module, out_dir):
-    """The table that failed in the field: a case number as the value."""
+    """The table that failed in the field: a case number as the value.
+
+    Nothing is filled in by the tool any more, so this is the user choosing:
+    the columns are picked from the drop-downs, by name, exactly as a person
+    would - and the run must behave the same as it always did.
+    """
     tool = module.Toolbox().tools[0]()
     params = tool.getParameterInfo()
     by_name = {p.name: p for p in params}
     setp(by_name, "flows", TEXT_VALUE)
     tool.updateParameters(params)
     check(
-        "the failing table is guessed with its count, not its case number",
-        by_name["value"].value == "MILDA_distribuees",
-        by_name["value"].value,
+        "the old case-number table leaves every column field empty",
+        all(
+            by_name[name].value in (None, "")
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].value for name in ("o_name", "value", "date", "o_lon")},
     )
     check(
-        "the village column names the destination",
-        by_name["d_name"].value == "Village",
-        by_name["d_name"].value,
-    )
-    check(
-        "and the origin is left unnamed: its two points differ from row to row",
-        by_name["o_name"].value in (None, ""),
-        by_name["o_name"].value,
-    )
-    check(
-        "the origin is still a drop-down after that decision",
-        getattr(by_name["o_name"].filter, "type", None) == "ValueList"
-        and by_name["o_name"].filter.list == [""] + [
+        "and offers its columns, the count among them",
+        by_name["value"].filter.list
+        == [""]
+        + [
             "Village",
             "CSI_CASE",
             "MILDA_distribuees",
@@ -678,15 +787,24 @@ def failing_table_checks(module, out_dir):
             "Longitude_rep",
             "Latitude_rep",
         ],
-        (by_name["o_name"].filter.type, by_name["o_name"].filter.list),
+        by_name["value"].filter.list,
+    )
+
+    # the user picks: the village names the destination, the count is the value
+    setp(by_name, "d_name", "Village")
+    setp(by_name, "value", "MILDA_distribuees")
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    check(
+        "the chosen count is accepted",
+        not by_name["value"].errorMessage,
+        by_name["value"].errorMessage,
     )
     check(
-        "the two coordinate pairs are read in the right order",
-        (by_name["o_lon"].value, by_name["o_lat"].value, by_name["d_lon"].value, by_name["d_lat"].value)
-        == ("Lon_dept", "Lat_dept", "Longitude_rep", "Latitude_rep"),
-        (by_name["o_lon"].value, by_name["o_lat"].value, by_name["d_lon"].value, by_name["d_lat"].value),
+        "and the village column to",
+        not by_name["d_name"].errorMessage,
+        by_name["d_name"].errorMessage,
     )
-    check("no date is invented from 'estimes'", by_name["date"].value in (None, ""), by_name["date"].value)
 
     # choose the case number by hand, as the run did
     setp(by_name, "value", "CSI_CASE")
@@ -725,6 +843,21 @@ def failing_table_checks(module, out_dir):
     params2 = tool2.getParameterInfo()
     by2 = {p.name: p for p in params2}
     setp(by2, "flows", TEXT_VALUE)
+    tool2.updateParameters(params2)
+    for name, column in (
+        ("d_name", "Village"),
+        ("value", "MILDA_distribuees"),
+        ("o_lon", "Lon_dept"),
+        ("o_lat", "Lat_dept"),
+        ("d_lon", "Longitude_rep"),
+        ("d_lat", "Latitude_rep"),
+    ):
+        check(
+            "%s can be picked from the list" % column,
+            column in by2[name].filter.list,
+            by2[name].filter.list,
+        )
+        setp(by2, name, column)
     setp(by2, "out_folder", out_dir)
     setp(by2, "page_name", "villages.html")
     setp(by2, "open_page", False)
@@ -747,11 +880,16 @@ def swapped_checks(module, out_dir):
     setp(by_name, "open_page", False)
     setp(by_name, "add_animation", False)
     tool.updateParameters(params)
-    check(
-        "the names alone put the coordinates the wrong way round",
-        (by_name["d_lon"].value, by_name["d_lat"].value) == ("Longitude_dest", "Latitude_dest"),
-        (by_name["d_lon"].value, by_name["d_lat"].value),
-    )
+    for name, column in (
+        ("o_name", "ORIGIN"),
+        ("d_name", "DESTINATION"),
+        ("o_lon", "Longitude_orig"),
+        ("o_lat", "Latitude_orig"),
+        ("d_lon", "Longitude_dest"),
+        ("d_lat", "Latitude_dest"),
+    ):
+        setp(by_name, name, column)
+    tool.updateParameters(params)
     json_out = os.path.join(out_dir, "swapped.json")
     setp(by_name, "out_json", json_out)
     tool.execute(params, stub.Messages())
@@ -790,6 +928,22 @@ def run(module, out_html, out_json):
     params = tool.getParameterInfo()
     by_name = {p.name: p for p in params}
     setp(by_name, "flows", FLOWS)
+    tool.updateParameters(params)
+    # the columns are chosen here, by hand, exactly as the user now must: the
+    # tool offers every column of the table and fills nothing in
+    chosen = {
+        "o_name": "ORIGIN",
+        "d_name": "DESTINATION",
+        "value": "HOUSEHOLDS",
+        "date": "DATE",
+    }
+    check(
+        "every column chosen by hand is in its drop-down",
+        all(name in by_name[key].filter.list for key, name in chosen.items()),
+        {key: (name, by_name[key].filter.list) for key, name in chosen.items()},
+    )
+    for key, name in chosen.items():
+        setp(by_name, key, name)
     setp(by_name, "out_folder", out_dir)
     setp(by_name, "page_name", os.path.basename(out_html))
     setp(by_name, "out_json", out_json)
@@ -917,9 +1071,10 @@ def run(module, out_html, out_json):
     setp(b3, "add_animation", True)
     setp(b3, "places", PLACES)
     setp(b3, "places_name", "CITY")
-    for name in ("o_name", "d_name", "value", "date"):
-        if b3[name].value:
-            b3[name].altered = True
+    setp(b3, "o_name", "ORIGIN")
+    setp(b3, "d_name", "DESTINATION")
+    setp(b3, "value", "HOUSEHOLDS")
+    setp(b3, "date", "DATE")
     tool3.updateParameters(p3)
     tool3.updateMessages(p3)
     tool3.execute(p3, stub.Messages())
@@ -972,9 +1127,10 @@ def run(module, out_html, out_json):
     setp(b4, "add_animation", True)
     setp(b4, "places", PLACES)
     setp(b4, "places_name", "CITY")
-    for name in ("o_name", "d_name", "value", "date"):
-        b4[name].value = None
-        b4[name].altered = False
+    setp(b4, "o_name", "ORIGIN")
+    setp(b4, "d_name", "DESTINATION")
+    setp(b4, "value", "HOUSEHOLDS")
+    setp(b4, "date", "DATE")
     tool4.updateParameters(p4)
     tool4.execute(p4, stub.Messages())
     check("the page is written when no map can take the layer", os.path.isfile(os.path.join(out_dir, "nomap.html")))
@@ -1102,6 +1258,11 @@ def run(module, out_html, out_json):
     except stub.ExecuteError as err:
         raised = str(err)
     check("running the mix says what to do", "Unzip the whole FlowMap folder" in raised, raised)
+
+    # ---- nothing chosen yet -------------------------------------------
+    stub.reset()
+    register_layers()
+    nothing_chosen_checks(module, out_dir)
 
     # ---- the columns are pickable, never typed ------------------------
     stub.reset()

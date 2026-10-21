@@ -234,6 +234,20 @@ def check_build(core, stub, tool, parameters, by_name, toolbox_module=None):
     )
     by_name["flows"].value = "check_table"
     by_name["flows"].altered = True
+    # the columns are chosen, as a user must: the tool offers them and fills
+    # nothing in, on purpose (a guess is invisible, so a wrong one is silent)
+    for name, column in (
+        ("o_name", "ORIGIN"),
+        ("d_name", "DESTINATION"),
+        ("value", "HOUSEHOLDS"),
+        ("date", "DATE"),
+        ("o_lon", "LON_O"),
+        ("o_lat", "LAT_O"),
+        ("d_lon", "LON_D"),
+        ("d_lat", "LAT_D"),
+    ):
+        by_name[name].value = column
+        by_name[name].altered = True
     by_name["out_folder"].value = folder
     by_name["page_name"].value = "page.html"
     by_name["open_page"].value = False
