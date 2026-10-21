@@ -347,7 +347,7 @@ test('a table whose flows never leave their place says so under the map', () => 
   // Two places, both flows inside a place: the page has dots and no line, so
   // it must say why instead of looking broken.
   const p = pageWith({
-    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.8' },
+    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
     nodes: [
       ['A', '', 9.0, 12.0],
       ['B', '', 9.1, 12.1],
@@ -365,7 +365,7 @@ test('a table whose flows never leave their place says so under the map', () => 
 
 test('an unnamed origin keeps its own dot, so the flow is a line', () => {
   const p = pageWith({
-    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.8' },
+    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
     nodes: [
       ['9.000, 12.000', '', 9.0, 12.0],
       ['Dantchiao', '', 9.1, 12.1],
@@ -381,18 +381,18 @@ test('an unnamed origin keeps its own dot, so the flow is a line', () => {
 
 test('the page names the build that wrote it', () => {
   const p = pageWith({
-    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 6.8' },
+    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 6.9' },
     nodes: [['A', '', 9.0, 12.0]],
     edges: [[0, 0, 0, 1]],
     maxDay: 0,
     total: 1,
   });
-  assert.match(p.els.noteSource.textContent, /Built with FlowMap 6\.8/);
+  assert.match(p.els.noteSource.textContent, /Built with FlowMap 6\.9/);
 });
 
 test('a table with one point per row shows its records moving round the dot', () => {
   const p = pageWith({
-    meta: { title: 'Villages', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.8' },
+    meta: { title: 'Villages', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
     nodes: [
       ['A', '', 9.0, 12.0],
       ['B', '', 9.1, 12.1],

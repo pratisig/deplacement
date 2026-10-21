@@ -137,13 +137,17 @@ the timeline, the exports, all of it.
 
 ```
 Insert > Toolbox > Add Toolbox…   pick FlowMap.pyt
-Flow map > Build a flow map page (6.8)   choose your layers
+Flow map > Build a flow map page (6.9)   choose your layers
 ```
+
+Every column parameter below the table is a drop-down of that table's own
+columns, filled when the tool opens as well as when the table changes, and no
+field is ever filled in for you: the lists are offered, you pick.
 
 The version is in the tool's own title on purpose: it is the one place where a
 screenshot of the pane says which build is installed. A toolbox left beside an
 older `flowmap_core.py` refuses to run instead of quietly building the old page,
-and every page ends its source line with `Built with FlowMap 6.8`.
+and every page ends its source line with `Built with FlowMap 6.9`.
 
 Everything that decides what the page shows lives in `arcgis/flowmap_core.py`,
 which imports nothing but the standard library, so it runs (and is tested)

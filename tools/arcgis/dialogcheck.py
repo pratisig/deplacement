@@ -285,7 +285,7 @@ def check_follows(module):
     )
 
 
-def check_reopen(module):
+def check_reopen(module, folder):
     """Opening the tool again on a table: the lists must already be full.
 
     ArcGIS Pro does not promise to call updateParameters when a dialog opens
@@ -309,6 +309,46 @@ def check_reopen(module):
         not by_name["o_name"].errorMessage,
         by_name["o_name"].errorMessage,
     )
+
+    # the call Pro makes when the pane is opened, before anything is drawn
+    tool, params, by_name = fresh_tool(module)
+    by_name["flows"].value = "/project/synthese"
+    by_name["flows"].altered = True
+    check("the tool has initializeParameters", hasattr(tool, "initializeParameters"))
+    if hasattr(tool, "initializeParameters"):
+        tool.initializeParameters(params)
+        check(
+            "initializeParameters, the call on open, fills them too",
+            by_name["o_name"].filter.list == [""] + SYNTHESE,
+            by_name["o_name"].filter.list,
+        )
+        check(
+            "and chooses nothing while doing it",
+            by_name["o_name"].value in (None, ""),
+            by_name["o_name"].value,
+        )
+
+    # the state the reported pane was in: the name in the box, nothing behind
+    previous = stub.env.workspace
+    stub.env.workspace = folder
+    try:
+        for path, expected in (
+            ("/project/synthese", SYNTHESE),
+            ("CIMPATH=Map/_Synthese_villages_.json", SYNTHESE),
+        ):
+            tool, params, by_name = fresh_tool(module)
+            by_name["flows"].text_only = True
+            by_name["flows"].shown_text = path
+            by_name["flows"].value = None
+            tool.updateParameters(params)
+            check(
+                "a box holding only the name still fills the lists (%s)"
+                % os.path.basename(path),
+                by_name["o_name"].filter.list == [""] + expected,
+                by_name["o_name"].filter.list,
+            )
+    finally:
+        stub.env.workspace = previous
 
 
 def check_places_columns(module):
@@ -397,7 +437,7 @@ def run():
 
     check_type_survives(module)
     check_follows(module)
-    check_reopen(module)
+    check_reopen(module, folder)
     check_places_columns(module)
     return module
 

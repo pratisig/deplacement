@@ -75,10 +75,28 @@ however good its list is. So the type is re-asserted after every list change,
 and verified: `check_install.py` prints `drop-down (8)` or `TEXT BOX` for each
 column parameter, in your copy of Pro. The list is filled when you choose the table,
 refilled when you change it, and filled again when the pane is reopened on the
-values of the previous run. The tool reads the columns itself — `ListFields`, then `Describe().fields`, then a cursor, then
-the JSON file behind a layer added from JSON or GeoJSON — so a layer Pro's own
-field control refuses (*"CIMPath=Map/_name_.json"* is the usual case) still
-gives a full list.
+values of the previous run.
+
+**The columns are read through every door at once, because no single one is
+always open.** A parameter in a Python toolbox offers two things and not always
+both: the name written in the box (`valueAsText`) and the layer or table behind
+it (`value`). A pane reopened on the last run's values can show the name with
+nothing behind it; a layer object that `ListFields` accepts in one Pro build is
+an error in the next. So each dataset is tried as the text in the box, then as
+the name the object reports, then as the object, then as its data source — and
+each of those is read with `ListFields`, with the fields a cursor reports (the
+same door the rows come through, so anything readable is listable), with
+`Describe().fields`, and, for a layer added from JSON or GeoJSON, from the file
+itself (*"CIMPath=Map/_name_.json"* is the usual case). A failed read is never
+remembered: the cache only keeps an answer that had columns in it, so the next
+callback can succeed where the last one could not.
+
+**A reopened pane fills its lists.** Pro does not promise to call
+`updateParameters` when the tool is opened again on an earlier run's values —
+and that is the failure this fills: the table written in the box, twelve lists
+still holding *"(choose the flow table or layer first)"*. `initializeParameters`
+therefore refreshes all twelve when the pane opens, without choosing anything
+for you. If the columns still cannot be read, the table parameter says so.
 
 **A column list is never empty, even before a table is chosen.** An empty value
 list is drawn as a plain text box, so before the table exists each list holds a
@@ -166,8 +184,8 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
   the tool warns with the two column pairs by name, the dialog shows the same
   warning next to the coordinate fields, and the page repeats it under the map.
 - **Which build made the page.** The tool is labelled `Build a flow map page
-  (6.8)`, each run opens with `FlowMap 6.8 - engine 6.8`, and the page's source
-  line ends with `Built with FlowMap 6.8`. A toolbox left beside an older
+  (6.9)`, each run opens with `FlowMap 6.9 - engine 6.9`, and the page's source
+  line ends with `Built with FlowMap 6.9`. A toolbox left beside an older
   `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
@@ -308,23 +326,27 @@ tested.
   dataset, the page, and what a column holds — identifiers, metres, readable
   dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 144 checks): the 28 parameters, the column
+  `tools/arcgis/toolcheck.py`, 157 checks): the 28 parameters, the column
   drop-downs (a placeholder before any table, the table's own columns after,
   a filter Pro reset to "Any" repaired on the next callback, a placeholder
-  never read as a field, no field filled in automatically, and a clear message
-  when Run is pressed with nothing chosen), the lists including a JSON layer, the folder and
+  never read as a field, no field filled in automatically, a pane reopened on
+  the last run's values filling all twelve lists, a host that refuses a layer
+  object and a host with no `ListFields` and no `Describe` still getting their
+  lists from the name and from a cursor, and a clear message when Run is
+  pressed with nothing chosen), the lists including a JSON layer, the folder and
   page name, the fields offered but never filled in, the
   old table that failed in the field, the swap of two mislabeled coordinate
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
   enabled, `.lyrx`), a new toolbox left beside an old engine, and every failure
   path;
-- checks the pane itself (`tools/arcgis/dialogcheck.py`, 462 checks): on a
+- checks the pane itself (`tools/arcgis/dialogcheck.py`, 467 checks): on a
   feature table, a standalone table, a point layer, a shapefile and a layer
   added from JSON, every column parameter is a value list, holds the columns
   of the dataset chosen above it, follows the dataset when it changes, drops a
   column the new table lacks, fills itself when the dialog is reopened
-  (`updateMessages` alone), keeps its type as a value list when Pro resets it
+  (`updateMessages` alone, `initializeParameters` on open, and a box that holds
+  nothing but the dataset's name), keeps its type as a value list when Pro resets it
   or rebuilds it from an empty list, and accepts every item clicked in it;
 - checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
   28 checks) and that the help XML matches the toolbox

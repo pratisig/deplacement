@@ -908,6 +908,164 @@ def swapped_checks(module, out_dir):
     )
 
 
+def reopened_pane_checks(module):
+    """The pane as it comes back, and the host as it really behaves.
+
+    Every check here is one photo of the reported dialog: the table written in
+    the box, and twelve drop-downs that still hold "(choose the flow table or
+    layer first)" - lists Pro drew before the table was known and never
+    refreshed. Three ways that happens are reproduced, and the columns have to
+    be offered in all three.
+    """
+    # TEXT_VALUE is the case-number table: the one whose columns Pro could not
+    # list in the reported dialog
+    offered = [
+        "",
+        "Village",
+        "CSI_CASE",
+        "MILDA_distribuees",
+        "Besoins_estimes_1_MILDA_2_personnes",
+        "Lon_dept",
+        "Lat_dept",
+        "Longitude_rep",
+        "Latitude_rep",
+    ]
+
+    def fresh():
+        tool = module.Toolbox().tools[0]()
+        params = tool.getParameterInfo()
+        return tool, params, {param.name: param for param in params}
+
+    # ---- 1. the table is only text, as a reopened pane leaves it --------
+    stub.reset()
+    register_layers()
+    tool, params, by_name = fresh()
+    check(
+        "the tool has initializeParameters, the callback Pro calls on open",
+        hasattr(tool, "initializeParameters"),
+    )
+    by_name["flows"].text_only = True
+    by_name["flows"].shown_text = TEXT_VALUE
+    by_name["flows"].value = None
+    tool.initializeParameters(params)
+    check(
+        "a pane opened on the last run's values fills its drop-downs",
+        by_name["o_name"].filter.list == offered,
+        by_name["o_name"].filter.list,
+    )
+    check(
+        "and fills every one of the twelve",
+        all(
+            by_name[name].filter.list == offered
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].filter.list for name in ("o_name", "value", "date")},
+    )
+    check(
+        "still without choosing anything for the user",
+        all(
+            by_name[name].value in (None, "")
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].value for name in ("o_name", "value", "date")},
+    )
+    check(
+        "and the placeholder is gone from the box once a table is there",
+        all(
+            str(by_name[name].value or "") not in module.PLACEHOLDERS
+            for name in ("o_name", "d_name", "value", "date")
+        ),
+        {name: by_name[name].value for name in ("o_name", "value", "date")},
+    )
+    check(
+        "the drop-downs are still value lists after the refresh",
+        all(
+            getattr(by_name[name].filter, "type", None) == "ValueList"
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: getattr(by_name[name].filter, "type", None) for name in ("o_name", "value")},
+    )
+
+    # ---- 2. the host refuses the object, the name works -----------------
+    stub.reset()
+    register_layers()
+    stub.STRICT_TEXT = True
+    tool, params, by_name = fresh()
+    by_name["flows"].text_only = True
+    by_name["flows"].shown_text = TEXT_VALUE
+    by_name["flows"].value = stub._Layer(TEXT_VALUE)
+    tool.initializeParameters(params)
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    check(
+        "a host that refuses a layer object still gets its lists filled",
+        by_name["d_name"].filter.list == offered,
+        by_name["d_name"].filter.list,
+    )
+    check(
+        "and no column field is filled in on that host either",
+        all(
+            by_name[name].value in (None, "")
+            for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat")
+        ),
+        {name: by_name[name].value for name in ("o_name", "value")},
+    )
+
+    # ---- 2b. only an object, and its str() is a repr -------------------
+    stub.reset()
+    register_layers()
+    tool, params, by_name = fresh()
+    by_name["flows"].value = stub._Layer(TEXT_VALUE)
+    tool.updateParameters(params)
+    check(
+        "a layer given as an object with no readable name still fills the lists",
+        by_name["o_name"].filter.list == offered,
+        by_name["o_name"].filter.list,
+    )
+
+    # ---- 3. no ListFields, no Describe: the cursor still lists ----------
+    stub.reset()
+    register_layers()
+    stub.NO_LISTFIELDS = True
+    stub.NO_DESCRIBE = True
+    tool, params, by_name = fresh()
+    setp(by_name, "flows", TEXT_VALUE)
+    tool.updateParameters(params)
+    check(
+        "a host with no ListFields and no Describe lists the columns anyway",
+        by_name["value"].filter.list == offered,
+        by_name["value"].filter.list,
+    )
+    setp(by_name, "d_name", "Village")
+    setp(by_name, "value", "MILDA_distribuees")
+    tool.updateMessages(params)
+    check(
+        "and a column picked from such a list is kept",
+        by_name["value"].value == "MILDA_distribuees",
+        by_name["value"].value,
+    )
+
+    # ---- 4. the places layer is remembered the same way -----------------
+    stub.reset()
+    register_layers()
+    tool, params, by_name = fresh()
+    by_name["flows"].text_only = True
+    by_name["flows"].shown_text = FLOWS
+    by_name["places"].text_only = True
+    by_name["places"].shown_text = PLACES
+    tool.initializeParameters(params)
+    check(
+        "a remembered places layer offers its own columns",
+        by_name["places_name"].filter.list == ["", "CITY", "REGION"],
+        by_name["places_name"].filter.list,
+    )
+    check(
+        "and the flow columns stay the flow table's",
+        by_name["o_name"].filter.list == ["", "ORIGIN", "DESTINATION", "HOUSEHOLDS", "DATE", "REGION"],
+        by_name["o_name"].filter.list,
+    )
+
+
 def run(module, out_html, out_json):
     """The whole tool, on the project that stands in for ArcGIS Pro."""
     stub.reset()
@@ -1263,6 +1421,7 @@ def run(module, out_html, out_json):
     stub.reset()
     register_layers()
     nothing_chosen_checks(module, out_dir)
+    reopened_pane_checks(module)
 
     # ---- the columns are pickable, never typed ------------------------
     stub.reset()

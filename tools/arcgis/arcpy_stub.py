@@ -68,9 +68,16 @@ class Parameter(object):
         self.enabled = True
         self.errorMessage = None
         self.warningMessage = None
+        # A pane reopened on the previous run keeps the name in the box and
+        # nothing behind it: this is that state, and it is what the dialog
+        # tests use instead of a layer object.
+        self.text_only = False
+        self.shown_text = None
 
     @property
     def valueAsText(self):
+        if self.text_only:
+            return self.shown_text
         if self.value is None:
             return None
         if isinstance(self.value, bool):
@@ -119,10 +126,21 @@ class _Desc(object):
 
 class _Cursor(object):
     def __init__(self, layer, fields, where_clause=None, spatial_reference=None, **extra):
+        if STRICT_TEXT and not isinstance(layer, str):
+            raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
         CURSOR_CALLS.append((str(layer), tuple(str(f) for f in fields), spatial_reference))
         table = TABLES.get(str(layer))
         if table is None:
             raise ExecuteError("The stand-in has no table for %s" % layer)
+        if fields == "*" or fields == ["*"] or fields == ("*",):
+            # real arcpy: an asterisk asks for every field, and cursor.fields
+            # then reports them - the way a layer Pro cannot describe is
+            # still listed
+            self.fields = list(table["fields"])
+            if table.get("shapeType"):
+                self.fields.append("SHAPE@")
+            self.rows = [[row.get(f) for f in self.fields] for row in table["rows"]]
+            return
         self.fields = ["SHAPE@" if str(f).lower() == "shape@" else f for f in fields]
         self.rows = [
             [row["SHAPE@"] if f == "SHAPE@" else row.get(f) for f in self.fields] for row in table["rows"]
@@ -152,7 +170,18 @@ class _Env(object):
     workspace = None
 
 
+# How fussy the host is, to reproduce what a real Pro build does and does not
+# accept. All false by default; the checks turn them on one at a time.
+STRICT_TEXT = False      # ListFields, Describe and cursors refuse an object
+NO_LISTFIELDS = False    # ListFields always fails
+NO_DESCRIBE = False      # Describe always fails
+
+
 def ListFields(layer):
+    if NO_LISTFIELDS:
+        raise ExecuteError("ListFields is not available here")
+    if STRICT_TEXT and not isinstance(layer, str):
+        raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
     table = TABLES.get(str(layer))
     if table is None:
         raise ExecuteError("The stand-in has no table for %s" % layer)
@@ -160,6 +189,10 @@ def ListFields(layer):
 
 
 def Describe(layer):
+    if NO_DESCRIBE:
+        raise ExecuteError("Describe is not available here")
+    if STRICT_TEXT and not isinstance(layer, str):
+        raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
     table = TABLES.get(str(layer))
     if table is None:
         raise ExecuteError("The stand-in has no table for %s" % layer)
@@ -227,6 +260,10 @@ def add_layer(name, fields, rows, shape_type=None):
 
 
 def reset():
+    global STRICT_TEXT, NO_LISTFIELDS, NO_DESCRIBE
+    STRICT_TEXT = False
+    NO_LISTFIELDS = False
+    NO_DESCRIBE = False
     TABLES.clear()
     reset_animation()
     CURSOR_CALLS[:] = []
@@ -347,6 +384,9 @@ class _Layer(object):
     def __init__(self, path):
         self.name = str(path).rstrip("/\\").split("/")[-1]
         self.path = str(path)
+        # what a real Pro layer answers about itself
+        self.dataSource = str(path)
+        self.catalogPath = str(path)
         self.time = _Time()
         self.enable_time_calls = []
 

@@ -87,7 +87,7 @@ def _load_core(path):
 # A new .pyt left beside an old flowmap_core.py loads without complaint and then
 # builds a page with the old rules - which is indistinguishable, from the user's
 # side, from a bug. Refuse the mix by name.
-CORE_VERSION = "6.8"
+CORE_VERSION = "6.9"
 
 CORE = None
 CORE_ERROR = ""
@@ -137,7 +137,7 @@ else:
 # one place where a user can see which build is installed: a screenshot of the
 # dialog says "6.8" or it does not. build-help.py reads this same string for
 # the XML documentation, so the label and the help cannot drift apart.
-TOOL_LABEL = "Build a flow map page (6.8)"
+TOOL_LABEL = "Build a flow map page (6.9)"
 
 PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
@@ -454,7 +454,7 @@ class BuildFlowMapPage(object):
     def __init__(self):
         self.label = TOOL_LABEL
         self.description = (
-            "Version 6.8. Read a flow table, resolve the places, and write one HTML file "
+            "Version 6.9. Read a flow table, resolve the places, and write one HTML file "
             "that draws an animated flow map. The page works offline, needs no "
             "API key, and can export GIF, video, SHP, GeoJSON, GeoParquet and "
             "CSV. The flows can also be added to the current map as a "
@@ -559,6 +559,24 @@ class BuildFlowMapPage(object):
             pass
         return params
 
+    # --------------------------------------------------------- initialising
+    def initializeParameters(self, parameters):
+        """Fill the lists when a pane opens on the values of the last run.
+
+        Pro does not promise to call updateParameters when the tool is opened
+        again on an earlier run's values, and the failure is exactly the one
+        reported: the table is written in the box, and every drop-down below
+        it still holds "(choose the flow table or layer first)". A pane that
+        opens with twelve empty lists opens with twelve text boxes, because a
+        value list with nothing in it is drawn as a box.
+
+        Nothing is chosen here: the columns are offered, the user picks.
+        """
+        try:
+            self._refresh_lists({param.name: param for param in parameters})
+        except Exception:
+            pass
+
     # ------------------------------------------------------------- reading
     @staticmethod
     def _text(param):
@@ -591,46 +609,165 @@ class BuildFlowMapPage(object):
         text = self._text(param)
         return "" if self._is_placeholder(text) else text
 
+    @staticmethod
+    def _refs_of(dataset):
+        """Every form of one dataset that arcpy can be handed, best first.
+
+        A parameter in a Python toolbox gives two answers and they are not
+        always both there: ``valueAsText`` is the name written in the box, and
+        ``value`` is the layer, table or string behind it. A pane reopened on
+        the values of the previous run can show the name with nothing behind
+        it, and a layer object that ListFields accepts in one Pro build is a
+        ``TypeError`` in the next one. So the text comes first, then the name
+        an object reports about itself, then the object - and every reader
+        below tries the whole list instead of betting on one form.
+        """
+        refs = []
+
+        def add(value):
+            if value is None:
+                return
+            if isinstance(value, str):
+                text = value.strip()
+                if "<" in text and " object at 0x" in text:
+                    # a repr is not a dataset: it is what str() says about an
+                    # object whose name Pro did not give us
+                    return
+                for form in (text.strip("'\""), text):
+                    if form and form not in refs:
+                        refs.append(form)
+                return
+            try:
+                text = str(value).strip()
+            except Exception:
+                text = ""
+            # str() of a Pro layer is its name; str() of a Python object is a
+            # repr, which no cursor will ever open
+            if text and "<" not in text and " object at 0x" not in text and text not in refs:
+                refs.append(text)
+            for attr in ("dataSource", "catalogPath", "name"):
+                try:
+                    extra = getattr(value, attr, None)
+                except Exception:
+                    extra = None
+                if isinstance(extra, str) and extra.strip():
+                    extra = extra.strip()
+                    if extra not in refs:
+                        refs.append(extra)
+            try:
+                if value not in refs:
+                    refs.append(value)
+            except Exception:
+                pass
+
+        if isinstance(dataset, (str, bytes)):
+            add(dataset)
+            return refs
+        # a Parameter: the text in the box, then the object behind it
+        try:
+            add(dataset.valueAsText)
+        except Exception:
+            pass
+        try:
+            value = dataset.value
+        except Exception:
+            value = None
+        if value not in (None, "", [], ()):
+            add(value)
+        if not refs:
+            add(dataset)
+        return refs
+
     def _columns_of(self, dataset):
         """The columns of a dataset, whatever kind of dataset it is.
 
-        Four ways, in order, because the first one is not always available:
-        ListFields, Describe().fields, a cursor that reports its own fields,
-        and - for a layer added from a JSON or GeoJSON file - the file itself.
-        That last one is what makes a JSON layer usable in the dialog.
+        Every way at once, because no single one is always there: ListFields,
+        the fields a cursor reports (the same door the rows are read through,
+        so it works wherever reading works), Describe().fields, and - for a
+        layer added from a JSON or GeoJSON file - the file itself.
+
+        A failure is never remembered: an empty answer is not cached, so the
+        next callback can find the columns that were not readable a moment
+        ago, instead of the dialog staying empty for the rest of the session.
         """
-        if not dataset:
+        refs = self._refs_of(dataset)
+        if not refs:
             return []
-        key = str(dataset)
+        key = "|".join(str(ref) for ref in refs[:3])
         if key in self._columns_cache:
             return self._columns_cache[key]
-        names = self._read_column_names(dataset)
-        self._columns_cache[key] = names
+        names = self._read_column_names(refs)
+        if names:
+            self._columns_cache[key] = names
         return names
 
-    def _read_column_names(self, dataset):
+    def _read_column_names(self, refs):
+        for step in (
+            self._names_from_listfields,
+            self._names_from_cursor,
+            self._names_from_describe,
+            self._json_columns,
+        ):
+            for ref in refs:
+                try:
+                    names = self._clean_columns(step(ref))
+                except Exception:
+                    names = []
+                if names:
+                    return names
+        return []
+
+    @staticmethod
+    def _names_from_listfields(ref):
         names = []
+        for field in arcpy.ListFields(ref) or []:
+            name = getattr(field, "name", None)
+            if name:
+                names.append(str(name))
+        return names
+
+    @staticmethod
+    def _names_from_cursor(ref):
+        """A cursor reports the fields of what it opened, including for the
+        layers Pro cannot describe - and it is the very door the rows come
+        through, so anything readable is listable."""
+        cursor = None
         try:
-            for field in arcpy.ListFields(dataset):
-                name = getattr(field, "name", None)
-                if name:
-                    names.append(str(name))
-        except Exception:
-            pass
-        if not names:
             try:
-                describe = arcpy.Describe(dataset)
-                for field in getattr(describe, "fields", None) or []:
-                    name = getattr(field, "name", None)
-                    if name:
-                        names.append(str(name))
+                cursor = arcpy.da.SearchCursor(ref, "*")
             except Exception:
-                pass
-        if not names:
-            # a layer added from a JSON or GeoJSON file: Pro can list no field
-            # for it, so the file itself is read
-            names = self._json_columns(dataset)
-        return self._clean_columns(names)
+                cursor = arcpy.da.SearchCursor(ref, ["*"])
+            fields = getattr(cursor, "fields", None)
+            return [str(name) for name in (fields or [])]
+        finally:
+            close = getattr(cursor, "__exit__", None)
+            if close is not None:
+                try:
+                    close(None, None, None)
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _names_from_describe(ref):
+        names = []
+        describe = arcpy.Describe(ref)
+        for field in getattr(describe, "fields", None) or []:
+            name = getattr(field, "name", None)
+            if name:
+                names.append(str(name))
+        return names
+
+    def _search(self, dataset, fields, **kwargs):
+        """Open a search cursor on whichever form of the dataset works."""
+        error = None
+        for ref in self._refs_of(dataset):
+            try:
+                return arcpy.da.SearchCursor(ref, fields, **kwargs)
+            except Exception as err:
+                error = err
+        if error is not None:
+            raise error
+        raise arcpy.ExecuteError("No dataset is chosen to read.")
 
     @staticmethod
     def _clean_columns(names):
@@ -755,7 +892,7 @@ class BuildFlowMapPage(object):
         fields = [name for name in names if name]
         if fields:
             try:
-                with arcpy.da.SearchCursor(layer, fields) as cursor:
+                with self._search(layer, fields) as cursor:
                     for index, values in enumerate(cursor):
                         rows.append(dict(zip(fields, values)))
                         if index + 1 >= limit:
@@ -791,6 +928,18 @@ class BuildFlowMapPage(object):
             return "Flow map"
         return text[:1].upper() + text[1:]
 
+    def _label_of(self, dataset):
+        """What to call a dataset in a message - never a Python repr."""
+        text = self._text(dataset)
+        if text and " object at 0x" not in text:
+            return text.strip("'\"")
+        for ref in reversed(self._refs_of(dataset)):
+            if isinstance(ref, str):
+                name = os.path.basename(ref.rstrip("\\/"))
+                if name:
+                    return name
+        return "the chosen table"
+
     def _refresh_lists(self, by_name):
         """Fill every column drop-down from the dataset it belongs to.
 
@@ -805,9 +954,21 @@ class BuildFlowMapPage(object):
             if param is None:
                 continue
             dataset = by_name.get(source)
-            dataset = dataset.value if dataset is not None else None
-            columns = self._columns_of(dataset) if dataset else []
-            self._sync_columns(param, columns, source, dataset_present=bool(dataset))
+            # the whole parameter goes in, not param.value: the text Pro shows
+            # in the box is often the only thing left after a run, and one
+            # unreadable dataset must not stop the other eleven lists
+            try:
+                columns = self._columns_of(dataset) if dataset is not None else []
+            except Exception:
+                columns = []
+            try:
+                present = bool(self._text(dataset)) if dataset is not None else False
+            except Exception:
+                present = False
+            try:
+                self._sync_columns(param, columns, source, dataset_present=present)
+            except Exception:
+                pass
         # the last word: a column parameter is a drop-down, on every pass
         self._keep_lists(by_name)
 
@@ -917,7 +1078,9 @@ class BuildFlowMapPage(object):
             pass
         value = self._text(param)
         if not columns:
-            if value and not self._is_placeholder(value):
+            # with a dataset chosen, a placeholder is not a choice: it must
+            # not sit in the box looking like one
+            if value and (dataset_present or not self._is_placeholder(value)):
                 try:
                     param.value = None
                 except Exception:
@@ -961,7 +1124,9 @@ class BuildFlowMapPage(object):
         flows = by_name.get("flows")
         if flows is None:
             return
-        key = str(flows.value) if flows.value else ""
+        # the text in the box, never param.value alone: a pane reopened on
+        # the last run's values can show the table with nothing behind it
+        key = self._text(flows)
         if key != self._table:
             self._table = key
             self._sample = None
@@ -971,12 +1136,12 @@ class BuildFlowMapPage(object):
         # 1. every column drop-down follows its dataset
         self._refresh_lists(by_name)
 
-        if CORE is None or not flows.value:
+        if CORE is None or not key:
             return
-        names = self._columns_of(flows.value)
+        names = self._columns_of(flows)
         if not names:
             return
-        sample = self._sample_for_table(flows.value, names)
+        sample = self._sample_for_table(flows, names)
 
         # 2. the title defaults to the table's name, and nothing else does.
         #
@@ -1003,7 +1168,7 @@ class BuildFlowMapPage(object):
                 pass
 
         # 4. a point layer carries its own coordinates
-        if self._is_points(flows.value):
+        if self._is_points(flows):
             for lon, lat in (("o_lon", "o_lat"), ("d_lon", "d_lat")):
                 for name in (lon, lat):
                     param = by_name.get(name)
@@ -1059,14 +1224,16 @@ class BuildFlowMapPage(object):
         # the lists first: every check below reads a column back
         self._refresh_lists(by_name)
         flows = by_name.get("flows")
-        if flows is None or not flows.value:
+        if flows is None or not self._text(flows):
             return
-        names = self._columns_of(flows.value)
+        names = self._columns_of(flows)
         if not names:
             flows.setWarningMessage(
-                "The columns of this table could not be read. A layer added from "
-                "a JSON file should still work; if the list below stays empty, "
-                "add the table to the map first."
+                "The columns of this table could not be read, although the tool "
+                "asked for them by name, by layer, by file path, with "
+                "ListFields, with Describe and through a cursor. Add the table "
+                "to the map (its contents, not only its folder) and choose it "
+                "in the box again: the lists are refilled on every change."
             )
             return
 
@@ -1076,8 +1243,10 @@ class BuildFlowMapPage(object):
             if param is None:
                 continue
             dataset = by_name.get(source)
-            dataset = dataset.value if dataset is not None else None
-            columns = self._columns_of(dataset) if dataset else []
+            try:
+                columns = self._columns_of(dataset) if dataset is not None else []
+            except Exception:
+                columns = []
             value = self._text(param)
             if value and columns and value not in columns:
                 param.setErrorMessage(
@@ -1087,7 +1256,7 @@ class BuildFlowMapPage(object):
 
         # the engine's findings, placed under the parameter they concern
         mapping = self._mapping_from(by_name)
-        sample = self._sample_for_table(flows.value, names)
+        sample = self._sample_for_table(flows, names)
         try:
             findings = CORE.diagnose_mapping(sample, mapping) if CORE else []
         except Exception:
@@ -1106,7 +1275,7 @@ class BuildFlowMapPage(object):
         chosen = self._mapping_from(by_name)
         if not any(
             chosen.get(role) for role in ("oName", "dName", "oLon", "oLat", "dLon", "dLat")
-        ) and not self._is_points(flows.value):
+        ) and not self._is_points(flows):
             flows.setWarningMessage(
                 "No column chosen yet: pick them from the lists below. The "
                 "place names, or the coordinates, are the least the page needs."
@@ -1115,10 +1284,10 @@ class BuildFlowMapPage(object):
         # can these names be put on a map at all?
         coords = all(self._text(by_name.get(name)) for name in ("o_lon", "o_lat"))
         lookup = any(
-            by_name.get(name) is not None and by_name[name].value
+            by_name.get(name) is not None and self._text(by_name[name])
             for name in ("places", "bounds_fine", "bounds_coarse")
         )
-        if not coords and not lookup and not self._is_points(flows.value):
+        if not coords and not lookup and not self._is_points(flows):
             if self._text(by_name.get("o_name")):
                 flows.setErrorMessage(
                     "These names cannot be placed yet: give the longitude and "
@@ -1128,7 +1297,7 @@ class BuildFlowMapPage(object):
 
         # an outlines layer without its name column cannot be matched
         for bounds, name in (("bounds_fine", "bounds_fine_name"), ("bounds_coarse", "bounds_coarse_name")):
-            if by_name.get(bounds) is not None and by_name[bounds].value:
+            if by_name.get(bounds) is not None and self._text(by_name[bounds]):
                 if by_name.get(name) is not None and not self._text(by_name[name]):
                     by_name[name].setErrorMessage(
                         "Choose the name column of these outlines: the page "
@@ -1146,7 +1315,8 @@ class BuildFlowMapPage(object):
         by_name = {param.name: param for param in parameters}
         if CORE is None:
             raise arcpy.ExecuteError(CORE_ERROR or "flowmap_core.py is missing.")
-        flows = self._text(by_name.get("flows"))
+        flows_param = by_name.get("flows")
+        flows = self._text(flows_param)
         if not flows:
             raise arcpy.ExecuteError("Choose the flow table or layer.")
 
@@ -1171,10 +1341,10 @@ class BuildFlowMapPage(object):
             mapping.get(role) for role in ("oName", "dName", "oLon", "oLat", "dLon", "dLat")
         )
         located_by_layer = any(
-            by_name.get(name) is not None and by_name[name].value
+            by_name.get(name) is not None and self._text(by_name[name])
             for name in ("places", "bounds_fine", "bounds_coarse")
         )
-        if not located_by_columns and not located_by_layer and not self._is_points(flows):
+        if not located_by_columns and not located_by_layer and not self._is_points(flows_param):
             raise arcpy.ExecuteError(
                 "No column is chosen yet, so there is nothing to place on the "
                 "map. Pick the columns in the drop-downs below the table: the "
@@ -1183,8 +1353,8 @@ class BuildFlowMapPage(object):
                 "columns of the table you chose."
             )
 
-        names = self._columns_of(flows)
-        sample = self._sample_for_table(flows, names) if names else []
+        names = self._columns_of(flows_param)
+        sample = self._sample_for_table(flows_param, names) if names else []
         pairing = self._apply_pairing(mapping, sample)
         findings = []
         try:
@@ -1197,17 +1367,17 @@ class BuildFlowMapPage(object):
             "FlowMap %s - engine %s"
             % (CORE_VERSION, getattr(CORE, "__version__", "?"))
         )
-        _say(messages, "Reading %s ..." % flows)
+        _say(messages, "Reading %s ..." % self._label_of(flows_param))
         try:
-            rows = self._read_rows(flows, mapping)
+            rows = self._read_rows(flows_param, mapping)
         except arcpy.ExecuteError:
             raise
         _say(messages, "  %d rows" % len(rows))
 
         places = []
-        if by_name.get("places") is not None and by_name["places"].value:
+        if by_name.get("places") is not None and self._text(by_name["places"]):
             places = self._read_places(
-                by_name["places"].valueAsText,
+                by_name["places"],
                 self._column(by_name, "places_name"),
                 self._column(by_name, "places_group"),
             )
@@ -1218,7 +1388,7 @@ class BuildFlowMapPage(object):
             ("admin2", "bounds_fine", "detailed outlines"),
             ("admin1", "bounds_coarse", "coarse outlines"),
         ):
-            if by_name.get(name_param) is None or not by_name[name_param].value:
+            if by_name.get(name_param) is None or not self._text(by_name[name_param]):
                 continue
             name_column = self._column(by_name, "%s_name" % name_param)
             if not name_column:
@@ -1226,7 +1396,7 @@ class BuildFlowMapPage(object):
                     "Choose the name column of the %s." % label
                 )
             bounds[role], tolerance = self._read_boundaries(
-                by_name[name_param].valueAsText, name_column
+                by_name[name_param], name_column
             )
             _say(messages, "  %d %s" % (len(bounds[role]), label))
 
@@ -1380,10 +1550,16 @@ class BuildFlowMapPage(object):
             pass
 
     def _is_points(self, layer):
-        try:
-            return str(arcpy.Describe(layer).shapeType) in ("Point", "Multipoint", "PointZ", "PointM")
-        except Exception:
-            return False
+        for ref in self._refs_of(layer):
+            try:
+                shape = str(arcpy.Describe(ref).shapeType)
+            except Exception:
+                continue
+            if shape in ("Point", "Multipoint", "PointZ", "PointM"):
+                return True
+            if shape and shape != "None":
+                return False
+        return False
 
     def _read_rows(self, layer, mapping):
         wanted = [mapping.get(role) for role in ROLES_IN_CORE]
@@ -1395,7 +1571,7 @@ class BuildFlowMapPage(object):
         use = list(fields) + (["SHAPE@"] if is_points else [])
         rows = []
         try:
-            with arcpy.da.SearchCursor(layer, use, **self._geo(use)) as cursor:
+            with self._search(layer, use, **self._geo(use)) as cursor:
                 for values in cursor:
                     row = dict(zip(fields, values[: len(fields)]))
                     if is_points:
@@ -1427,7 +1603,7 @@ class BuildFlowMapPage(object):
         fields = [name_field] + ([group_field] if group_field else [])
         places = []
         use = list(fields) + ["SHAPE@"]
-        with arcpy.da.SearchCursor(layer, use, **self._geo(use)) as cursor:
+        with self._search(layer, use, **self._geo(use)) as cursor:
             for values in cursor:
                 shape = values[-1]
                 point = getattr(shape, "firstPoint", None) if shape is not None else None
@@ -1453,7 +1629,7 @@ class BuildFlowMapPage(object):
         out = {}
         use = [name_field, "SHAPE@"]
         count = 0
-        with arcpy.da.SearchCursor(layer, use, **self._geo(use)) as cursor:
+        with self._search(layer, use, **self._geo(use)) as cursor:
             for name, shape in cursor:
                 if not name or shape is None:
                     continue
