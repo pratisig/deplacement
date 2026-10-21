@@ -36,7 +36,7 @@ import re
 import sys
 import unicodedata
 
-__version__ = "1.0.0"
+__version__ = "6.5"
 
 # --------------------------------------------------------------------- names
 
@@ -800,6 +800,42 @@ def diagnose_mapping(rows, mapping):
             % (mapping.get("dLon"), mapping.get("dLat")),
         )
 
+    # The two ends of a flow on the same point: the classic wrong pair of
+    # coordinate fields. Every flow then starts where it ends, the page has no
+    # line to draw, and it looks broken although it is faithful. Say it here,
+    # while the dialog is still open, rather than after the run.
+    o_lon, o_lat = mapping.get("oLon"), mapping.get("oLat")
+    d_lon, d_lat = mapping.get("dLon"), mapping.get("dLat")
+    if o_lon and o_lat and d_lon and d_lat and rows:
+        checked = 0
+        identical = 0
+        for row in rows:
+            x1, y1 = to_number(row.get(o_lon)), to_number(row.get(o_lat))
+            x2, y2 = to_number(row.get(d_lon)), to_number(row.get(d_lat))
+            if None in (x1, y1, x2, y2):
+                continue
+            checked += 1
+            if abs(x1 - x2) <= 1e-4 and abs(y1 - y2) <= 1e-4:
+                identical += 1
+        if checked and identical == checked:
+            add(
+                "dLon",
+                "warning",
+                'The origin and destination coordinates are the same in all %d '
+                'rows ("%s"/"%s" against "%s"/"%s"): every flow will start and '
+                "end at the same dot, so the page shows records inside places "
+                "and no line between two places. Choose the coordinate pair "
+                "that holds the other end of the movement." % (checked, o_lon, o_lat, d_lon, d_lat),
+            )
+        elif checked and identical >= max(2, checked * 0.8):
+            add(
+                "dLon",
+                "info",
+                "%d of %d rows have the same origin and destination "
+                "coordinates; those flows are drawn as records inside one place."
+                % (identical, checked),
+            )
+
     unit = guess_unit_label(value or "")
     if value and unit:
         add("value", "info", 'The values will be counted in "%s" (from "%s").' % (unit, value))
@@ -1079,23 +1115,38 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
         value = to_number(raw) if str(raw).strip() else (None if has(mapping.get("value")) else default_value)
         if value is None or value == 0:
             continue
-        o_name = str(get(row, mapping.get("oName")) or "").strip()
-        d_name = str(get(row, mapping.get("dName")) or "").strip() or o_name
-        # one name column names both ends: never label a dot with coordinates
-        # when the row does carry a name
-        if not o_name:
-            o_name = d_name
-        o_column_group = str(get(row, mapping.get("oGroup")) or "").strip()
-        d_column_group = str(get(row, mapping.get("dGroup")) or "").strip()
-        o_group = resolve_group(o_name, o_column_group)
-        # with a single group column, the row's group describes both ends
-        d_group = resolve_group(d_name, d_column_group, inherit_from=o_column_group or o_group)
         o_lon = to_number(get(row, mapping.get("oLon"))) if has(mapping.get("oLon")) else None
         o_lat = to_number(get(row, mapping.get("oLat"))) if has(mapping.get("oLat")) else None
         # no destination coordinates in the table: a row describes one place,
         # and the page counts it as a record within that place
         d_lon = to_number(get(row, mapping.get("dLon"))) if mapping.get("dLon") else o_lon
         d_lat = to_number(get(row, mapping.get("dLat"))) if mapping.get("dLat") else o_lat
+        same_point = (
+            o_lon is not None
+            and o_lat is not None
+            and d_lon is not None
+            and d_lat is not None
+            and abs(o_lon - d_lon) <= SAME_PLACE
+            and abs(o_lat - d_lat) <= SAME_PLACE
+        )
+        o_name = str(get(row, mapping.get("oName")) or "").strip()
+        d_name = str(get(row, mapping.get("dName")) or "").strip()
+        # One name column names both ends - but only when the row really
+        # describes one point. When the row carries two different coordinate
+        # pairs, copying the destination name onto the origin welds the two
+        # ends into one dot: 36 rows then give 36 dots, 36 flows that start
+        # where they end, and not one line on the map. That is the "nothing is
+        # drawn" report. An unnamed end is labelled by its coordinates instead
+        # and keeps its own position, so the flow stays a line.
+        if not d_name and (same_point or d_lon is None):
+            d_name = o_name
+        if not o_name and same_point:
+            o_name = d_name
+        o_column_group = str(get(row, mapping.get("oGroup")) or "").strip()
+        d_column_group = str(get(row, mapping.get("dGroup")) or "").strip()
+        o_group = resolve_group(o_name, o_column_group)
+        # with a single group column, the row's group describes both ends
+        d_group = resolve_group(d_name, d_column_group, inherit_from=o_column_group or o_group)
         from_i = place_of(o_name, o_group, o_lon, o_lat)
         to_i = place_of(d_name, d_group, d_lon, d_lat)
         if from_i is None or to_i is None:
@@ -1117,6 +1168,36 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
             + hint
             + (("\n" + findings) if findings else "")
         )
+    # A flow whose two ends are one point is a record inside a place, not a
+    # movement: it is drawn as a small loop, never as a line. When that is
+    # every flow, the map is a field of dots and reads as "nothing is drawn",
+    # so say why, by field name, instead of leaving the user to guess.
+    loops = sum(1 for edge in edges if edge[1] == edge[2])
+    if loops and loops == len(edges):
+        guidance = (
+            "Choose the coordinate pair that holds the other end of the "
+            "movement - the page draws a line only when the two ends are two "
+            "points."
+        )
+        if mapping.get("dName") and mapping.get("dName") == mapping.get("oName"):
+            guidance += (
+                ' The origin and destination name fields are both "%s", so one '
+                "column names both ends; leave the origin name empty if the "
+                "table has no separate column for it."
+                % mapping.get("dName")
+            )
+        warnings.append(
+            "All %d flows start and end at the same point: the table gives both "
+            "ends the same coordinates, so the page counts %s inside each place "
+            "instead of movement between places. %s"
+            % (len(edges), (meta or {}).get("unit") or "records", guidance)
+        )
+    elif loops:
+        warnings.append(
+            "%d of %d flows start and end at the same point; they are drawn as "
+            "small loops beside the dot." % (loops, len(edges))
+        )
+
     if split:
         shown = ", ".join(sorted(split)[:5])
         warnings.append(
@@ -1143,9 +1224,11 @@ def build_dataset(rows, mapping, meta=None, places=None, admin1=None, admin2=Non
     meta.setdefault("groupLabel", "group" if not (admin1 or admin2) else "area")
     meta["dateStart"] = date_start if date_mode == "date" else None
     meta["dateMode"] = date_mode
+    # stamped into the page so a build can be told apart from an older one
+    meta["app"] = "FlowMap " + __version__
 
     dataset = {
-        "meta": {k: meta[k] for k in ("title", "subtitle", "unit", "nodeLabel", "groupLabel", "source", "dateStart", "dateMode") if k in meta},
+        "meta": {k: meta[k] for k in ("title", "subtitle", "unit", "nodeLabel", "groupLabel", "source", "dateStart", "dateMode", "app") if k in meta},
         "nodes": nodes,
         "edges": edges,
         "maxDay": max_day,
@@ -1528,6 +1611,53 @@ def selftest():
         "findings_text keeps the errors, one per line",
         findings_text(findings).count("\n") >= 0 and "CSI_CASE" in findings_text(findings),
         findings_text(findings),
+    )
+
+    # ---- one name, two coordinate pairs -----------------------------------
+    # The field report: "Origin name field" left empty, "Destination name
+    # field" = Village, one longitude/latitude pair per end. The origin used to
+    # borrow the destination's name, both ends fell on one dot, and 36 rows
+    # gave 36 dots and no line at all.
+    TWO_ENDS = [
+        {"Village": "A", "X_in": "1.0", "Y_in": "1.0", "X_out": "2.0", "Y_out": "2.0", "N": "5"},
+        {"Village": "B", "X_in": "3.0", "Y_in": "3.0", "X_out": "4.0", "Y_out": "4.0", "N": "7"},
+    ]
+    ONE_NAME = {
+        "dName": "Village",
+        "oLon": "X_in",
+        "oLat": "Y_in",
+        "dLon": "X_out",
+        "dLat": "Y_out",
+        "value": "N",
+    }
+    two, _ = build_dataset(TWO_ENDS, ONE_NAME)
+    check(
+        "an unnamed origin keeps its own position",
+        not any(edge[1] == edge[2] for edge in two["edges"]),
+        two["edges"],
+    )
+    check("two ends give four dots, not two", len(two["nodes"]) == 4, two["nodes"])
+    flat = [dict(row, X_out=row["X_in"], Y_out=row["Y_in"]) for row in TWO_ENDS]
+    flat_ds, flat_warnings = build_dataset(flat, ONE_NAME)
+    check(
+        "a table with one point per row says the flows are inside places",
+        any("start and end at the same point" in w for w in flat_warnings),
+        flat_warnings,
+    )
+    check(
+        "the open dialog names the two coordinate pairs",
+        any(f["role"] == "dLon" and "same" in f["text"] for f in diagnose_mapping(flat, ONE_NAME)),
+        diagnose_mapping(flat, ONE_NAME),
+    )
+    check(
+        "the page is stamped with the build that wrote it",
+        str(flat_ds["meta"].get("app", "")).startswith("FlowMap "),
+        flat_ds["meta"].get("app"),
+    )
+    check(
+        "a table without dates still has an axis",
+        flat_ds["meta"]["dateMode"] == "sequence" and flat_ds["maxDay"] >= 1,
+        (flat_ds["meta"]["dateMode"], flat_ds["maxDay"]),
     )
 
     failed = [c for c in checks if not c[1]]

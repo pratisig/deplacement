@@ -183,5 +183,15 @@ function updateStatus() {
       '</b> — public tiles, no API key, no sign-up.' +
       (provMsg ? ' <span class="warn">' + provMsg + '</span>' : '');
   }
+  // A table whose two ends share one coordinate pair gives no line to draw:
+  // the page counts every record inside a place. Say so under the map, so a
+  // field of dots is never mistaken for a broken page.
+  const loops = typeof E !== 'undefined' && E ? E.filter(e => e[1] === e[2]).length : 0;
+  if (loops && typeof E !== 'undefined' && loops === E.length) {
+    s +=
+      ' <span class="warn">Every flow in this table starts and ends at the same place: ' +
+      'the two ends share one coordinate pair, so the records are counted inside each ' +
+      'place. Give each end its own coordinates to draw movement between places.</span>';
+  }
   $('#bm').innerHTML = s;
 }

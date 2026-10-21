@@ -137,15 +137,20 @@ the timeline, the exports, all of it.
 
 ```
 Insert > Toolbox > Add Toolbox…   pick FlowMap.pyt
-Flow map > Build a flow map page  choose your layers
+Flow map > Build a flow map page (6.5)   choose your layers
 ```
+
+The version is in the tool's own title on purpose: it is the one place where a
+screenshot of the pane says which build is installed. A toolbox left beside an
+older `flowmap_core.py` refuses to run instead of quietly building the old page,
+and every page ends its source line with `Built with FlowMap 6.5`.
 
 Everything that decides what the page shows lives in `arcgis/flowmap_core.py`,
 which imports nothing but the standard library, so it runs (and is tested)
 without ArcGIS:
 
 ```sh
-python3 arcgis/flowmap_core.py selftest                          # 29 checks
+python3 arcgis/flowmap_core.py selftest                          # 57 checks
 python3 arcgis/flowmap_core.py demo --out demo.html               # a page from an invented table
 python3 arcgis/flowmap_core.py build --input spec.json --out page.html
 node tools/package-arcgis.mjs                                     # dist/ + a zip for Pro

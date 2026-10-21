@@ -208,7 +208,7 @@ def check_dialog(stub):
     return module, tool, parameters, by_name
 
 
-def check_build(core, stub, tool, parameters, by_name):
+def check_build(core, stub, tool, parameters, by_name, toolbox_module=None):
     print("\nA small build")
     folder = tempfile.mkdtemp(prefix="flowmap-check-")
     page = os.path.join(folder, "page.html")
@@ -243,6 +243,12 @@ def check_build(core, stub, tool, parameters, by_name):
     warnings = list(getattr(stub, "WARNINGS", []))
     check("the build reports its warnings", True, warnings[0] if warnings else "none")
     check("the core names itself", bool(getattr(core, "__version__", "")), str(getattr(core, "__version__", "")))
+    toolbox_version = str(getattr(toolbox_module, "CORE_VERSION", "") or "")
+    check(
+        "the toolbox and the engine are the same build",
+        toolbox_version == str(getattr(core, "__version__", "")),
+        "engine %s against toolbox %s" % (getattr(core, "__version__", ""), toolbox_version or "?"),
+    )
 
 
 def main(argv=None):
@@ -306,7 +312,7 @@ def main(argv=None):
         if stub is not None:
             try:
                 module, tool, parameters, by_name = check_dialog(stub)
-                check_build(core, stub, tool, parameters, by_name)
+                check_build(core, stub, tool, parameters, by_name, module)
             except Exception:
                 bad("the dialog and a build", "traceback below")
                 traceback.print_exc()

@@ -21,6 +21,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -800,6 +801,44 @@ def run(module, out_html, out_json):
         raised = str(err)
     module.CORE = saved
     check("a missing engine is explained", "flowmap_core.py" in raised, raised)
+
+    # a new toolbox left beside an old engine: a mix that builds the old page
+    # with no complaint, so it is refused by name, here and when it runs
+    folder_ = tempfile.mkdtemp()
+    pyt = os.path.join(folder_, "FlowMap.pyt")
+    with open(os.path.join(ROOT, "arcgis", "FlowMap.pyt"), "r", encoding="utf-8") as fh:
+        source = fh.read()
+    with open(pyt, "w", encoding="utf-8") as fh:
+        fh.write(source)
+    with open(os.path.join(ROOT, "arcgis", "flowmap_core.py"), "r", encoding="utf-8") as fh:
+        core_text = fh.read()
+    old_version = "6.4"
+    with open(os.path.join(folder_, "flowmap_core.py"), "w", encoding="utf-8") as fh:
+        fh.write(re.sub(r'__version__ = "[^"]*"', '__version__ = "%s"' % old_version, core_text, count=1))
+    mixed = load_toolbox(pyt)
+    check("an old engine beside a new toolbox is refused", mixed.CORE is None, mixed.CORE_ERROR)
+    check(
+        "the two versions are named",
+        old_version in mixed.CORE_ERROR and mixed.CORE_VERSION in mixed.CORE_ERROR,
+        mixed.CORE_ERROR,
+    )
+    tool8 = mixed.Toolbox().tools[0]()
+    p8 = tool8.getParameterInfo()
+    check("the dialog still builds", len(p8) > 0, len(p8))
+    mixed_by_name = {p.name: p for p in p8}
+    setp(mixed_by_name, "flows", FLOWS)
+    tool8.updateMessages(p8)
+    check(
+        "and the reason is shown next to the table",
+        old_version in str(mixed_by_name["flows"].warningMessage),
+        mixed_by_name["flows"].warningMessage,
+    )
+    raised = ""
+    try:
+        tool8.execute(p8, stub.Messages())
+    except stub.ExecuteError as err:
+        raised = str(err)
+    check("running the mix says what to do", "Unzip the whole FlowMap folder" in raised, raised)
 
     # ---- the table that failed in the field ----------------------------
     stub.reset()

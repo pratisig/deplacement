@@ -59,13 +59,14 @@ def read_pyt(path=PYT):
         target = node.targets[0]
         if not isinstance(target, ast.Name):
             continue
-        if target.id in ("PARAMETERS", "HELP"):
+        if target.id in ("PARAMETERS", "HELP", "TOOL_LABEL"):
             found[target.id] = ast.literal_eval(node.value)
     if "PARAMETERS" not in found:
         raise SystemExit("%s has no PARAMETERS table" % path)
     if "HELP" not in found:
         found["HELP"] = {}
-    return found["PARAMETERS"], found["HELP"]
+    found.setdefault("TOOL_LABEL", "Build a flow map page")
+    return found["PARAMETERS"], found["HELP"], found["TOOL_LABEL"]
 
 
 def date_stamp(when=None):
@@ -106,13 +107,13 @@ def toolbox_xml(created, modified):
     )
 
 
-def tool_xml(parameters, help_texts, created, modified):
+def tool_xml(parameters, help_texts, created, modified, label="Build a flow map page"):
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<metadata xml:lang="en">',
         esri_block(created, modified).rstrip("\n"),
-        '  <tool name="BuildFlowMapPage" displayname="Build a flow map page" '
-        'toolboxalias="flowmap">',
+        '  <tool name="BuildFlowMapPage" displayname="%s" toolboxalias="flowmap">'
+        % escape(label),
         "    <summary>Write a self-contained flow-map page, and optionally add "
         "the flows to the map for the Time Slider.</summary>",
         "    <parameters>",
@@ -164,7 +165,7 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true", help="fail if the files do not match the .pyt")
     args = parser.parse_args(argv)
 
-    parameters, help_texts = read_pyt(args.pyt)
+    parameters, help_texts, label = read_pyt(args.pyt)
     missing = [name for name, *_rest in parameters if not str(help_texts.get(name, "")).strip()]
     if missing:
         raise SystemExit("no help text for: %s" % ", ".join(missing))
@@ -176,7 +177,7 @@ def main(argv=None):
         problems = []
         for path, expected in (
             (toolbox_path, toolbox_xml("", "")),
-            (tool_path, tool_xml(parameters, help_texts, "", "")),
+            (tool_path, tool_xml(parameters, help_texts, "", "", label)),
         ):
             if not os.path.isfile(path):
                 problems.append("%s is missing" % os.path.basename(path))
@@ -203,7 +204,7 @@ def main(argv=None):
                     created = line.strip().replace("<CreaDate>", "").replace("</CreaDate>", "")
                     break
     write(toolbox_path, toolbox_xml(created, modified))
-    write(tool_path, tool_xml(parameters, help_texts, created, modified))
+    write(tool_path, tool_xml(parameters, help_texts, created, modified, label))
     print("wrote %s" % toolbox_path)
     print("wrote %s (%d parameters documented)" % (tool_path, len(parameters)))
     return 0

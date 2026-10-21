@@ -119,6 +119,19 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
 - **One-place rows.** A point layer is a table of places, not of pairs: each row
   becomes a record *within* that place (the "inside" column of the page's
   table).
+- **One name, two coordinate pairs.** An empty *Origin name field* does not copy
+  the destination's name onto the origin: the two ends keep their own
+  coordinates, the unnamed end is labelled by its position, and the flow stays a
+  line between two places. Copying the name would weld the two ends into one
+  dot — 36 rows, 36 dots, not one line.
+- **When the two ends really are one point.** If the origin and destination
+  coordinates match in every row, the page has no line to draw. It says so:
+  the tool warns with the two column pairs by name, the dialog shows the same
+  warning next to the coordinate fields, and the page repeats it under the map.
+- **Which build made the page.** The tool is labelled `Build a flow map page
+  (6.5)`, each run opens with `FlowMap 6.5 - engine 6.5`, and the page's source
+  line ends with `Built with FlowMap 6.5`. A toolbox left beside an older
+  `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
 
@@ -184,7 +197,7 @@ node tools/render-map.mjs --html demo.html --out docs/arcgis-demo.png
 # a page from a spec file
 python3 flowmap_core.py build --input spec.json --out page.html --json dataset.json
 
-# the checks (51 of them, no dependencies)
+# the checks (57 of them, no dependencies)
 python3 flowmap_core.py selftest
 ```
 
@@ -254,16 +267,17 @@ tested.
 
 `npm test` runs `test/arcgis.test.mjs`, which:
 
-- runs `flowmap_core.py selftest` (51 checks: names, dates, geometry, the
+- runs `flowmap_core.py selftest` (57 checks: names, dates, geometry, the
   dataset, the page, and what a column holds — identifiers, metres, readable
   dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 100 checks): the 28 parameters, the drop-down
+  `tools/arcgis/toolcheck.py`, 105 checks): the 28 parameters, the drop-down
   lists including a JSON layer, the folder and page name, the guessing on the
   table that failed in the field, the swap of two mislabeled coordinate
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
-  enabled, `.lyrx`), and every failure path;
+  enabled, `.lyrx`), a new toolbox left beside an old engine, and every failure
+  path;
 - checks the pane itself (`tools/arcgis/dialogcheck.py`, 437 checks): on a
   feature table, a standalone table, a point layer, a shapefile and a layer
   added from JSON, every column parameter is a value list, holds the columns
@@ -272,7 +286,7 @@ tested.
   (`updateMessages` alone), keeps its type as a value list when Pro resets it
   or rebuilds it from an empty list, and accepts every item clicked in it;
 - checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
-  23 checks) and that the help XML matches the toolbox
+  25 checks) and that the help XML matches the toolbox
   (`python3 tools/arcgis/build-help.py --check`);
 - loads the page the toolbox wrote in the project's own browser harness and
   compares it, number for number, with the dataset the toolbox reported.

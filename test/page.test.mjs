@@ -332,3 +332,60 @@ test('dataset number formatting helpers', () => {
   assert.equal(T.fd(0), '4 Jan 2026');
   assert.equal(T.fd(1), '5 Jan 2026');
 });
+
+/** The built page with a different dataset inside it, as a built page carries one. */
+function pageWith(data) {
+  const html = page.html.replace(
+    /const EXAMPLE = \{[\s\S]*?\};/,
+    'const EXAMPLE = ' + JSON.stringify(data) + ';',
+  );
+  assert.notEqual(html, page.html, 'the example data was replaced');
+  return loadPage({ html });
+}
+
+test('a table whose flows never leave their place says so under the map', () => {
+  // Two places, both flows inside a place: the page has dots and no line, so
+  // it must say why instead of looking broken.
+  const p = pageWith({
+    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    nodes: [
+      ['A', '', 9.0, 12.0],
+      ['B', '', 9.1, 12.1],
+    ],
+    edges: [
+      [0, 0, 0, 10],
+      [0, 1, 1, 5],
+    ],
+    maxDay: 0,
+    total: 15,
+  });
+  assert.match(p.els.bm.innerHTML, /starts and ends at the same place/);
+  assert.match(p.els.bm.innerHTML, /Give each end its own coordinates/);
+});
+
+test('an unnamed origin keeps its own dot, so the flow is a line', () => {
+  const p = pageWith({
+    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    nodes: [
+      ['9.000, 12.000', '', 9.0, 12.0],
+      ['Dantchiao', '', 9.1, 12.1],
+    ],
+    edges: [[0, 0, 1, 10]],
+    maxDay: 0,
+    total: 10,
+  });
+  assert.equal(p.T.getLinks().length, 1, 'one route is drawn');
+  assert.notEqual(p.T.getLinks()[0].source, p.T.getLinks()[0].target, 'two different dots');
+  assert.equal(/starts and ends at the same place/.test(p.els.bm.innerHTML), false);
+});
+
+test('the page names the build that wrote it', () => {
+  const p = pageWith({
+    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 6.5' },
+    nodes: [['A', '', 9.0, 12.0]],
+    edges: [[0, 0, 0, 1]],
+    maxDay: 0,
+    total: 1,
+  });
+  assert.match(p.els.noteSource.textContent, /Built with FlowMap 6\.5/);
+});

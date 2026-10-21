@@ -83,6 +83,12 @@ def _load_core(path):
     return module
 
 
+# The engine and the toolbox are shipped together and must be the same build.
+# A new .pyt left beside an old flowmap_core.py loads without complaint and then
+# builds a page with the old rules - which is indistinguishable, from the user's
+# side, from a bug. Refuse the mix by name.
+CORE_VERSION = "6.5"
+
 CORE = None
 CORE_ERROR = ""
 CORE_FILE = _find_core()
@@ -97,6 +103,17 @@ if CORE_FILE:
             type(err).__name__,
             err,
         )
+    else:
+        found_version = str(getattr(CORE, "__version__", "") or "")
+        if found_version != CORE_VERSION:
+            CORE = None
+            CORE_ERROR = (
+                "This toolbox is FlowMap %s, but the engine beside it (%s) is "
+                "%s. Unzip the whole FlowMap folder again and add the toolbox "
+                "from that folder: an old engine builds a page with the old "
+                "rules, and the page then shows none of the new behaviour."
+                % (CORE_VERSION, os.path.basename(CORE_FILE), found_version or "unversioned")
+            )
 else:
     CORE_ERROR = (
         "flowmap_core.py was not found. It has to sit next to FlowMap.pyt. "
@@ -115,6 +132,12 @@ else:
 #
 # Four kinds of parameter and no more: TABLE is the data, FOLDER is where the
 # page goes, COLUMN is a drop-down of that data's columns, TEXT is a word.
+
+# The tool label is the heading of the Geoprocessing pane, so it is also the
+# one place where a user can see which build is installed: a screenshot of the
+# dialog says "6.5" or it does not. build-help.py reads this same string for
+# the XML documentation, so the label and the help cannot drift apart.
+TOOL_LABEL = "Build a flow map page (6.5)"
 
 PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
@@ -367,9 +390,9 @@ class Toolbox(object):
 
 class BuildFlowMapPage(object):
     def __init__(self):
-        self.label = "Build a flow map page"
+        self.label = TOOL_LABEL
         self.description = (
-            "Read a flow table, resolve the places, and write one HTML file "
+            "Version 6.5. Read a flow table, resolve the places, and write one HTML file "
             "that draws an animated flow map. The page works offline, needs no "
             "API key, and can export GIF, video, SHP, GeoJSON, GeoParquet and "
             "CSV. The flows can also be added to the current map as a "
@@ -896,6 +919,11 @@ class BuildFlowMapPage(object):
         by_name = {param.name: param for param in parameters}
         for param in parameters:
             self._clear(param)
+        if CORE is None and CORE_ERROR:
+            flows = by_name.get("flows")
+            if flows is not None:
+                flows.setWarningMessage(CORE_ERROR)
+            return
         # the lists first: every check below reads a column back
         self._refresh_lists(by_name)
         flows = by_name.get("flows")
@@ -1003,6 +1031,10 @@ class BuildFlowMapPage(object):
         except Exception:
             findings = []
 
+        messages.addMessage(
+            "FlowMap %s - engine %s"
+            % (CORE_VERSION, getattr(CORE, "__version__", "?"))
+        )
         messages.addMessage("Reading %s ..." % flows)
         try:
             rows = self._read_rows(flows, mapping)

@@ -158,6 +158,11 @@ function applyMeta() {
     'Limits: ' +
     (limitMode === 'districts' ? 'level 2' : limitMode === 'governorates' ? 'level 1' : 'off');
   const note = $('#noteSource');
-  if (note) note.textContent = m.source ? 'Source: ' + m.source + '.' : '';
+  if (note) {
+    const parts = [];
+    if (m.source) parts.push('Source: ' + m.source + '.');
+    if (m.app) parts.push('Built with ' + m.app + '.');
+    note.textContent = parts.join(' ');
+  }
 }
 const cap = s => String(s).charAt(0).toUpperCase() + String(s).slice(1);
