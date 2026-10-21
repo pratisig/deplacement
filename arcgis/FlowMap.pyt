@@ -87,7 +87,7 @@ def _load_core(path):
 # A new .pyt left beside an old flowmap_core.py loads without complaint and then
 # builds a page with the old rules - which is indistinguishable, from the user's
 # side, from a bug. Refuse the mix by name.
-CORE_VERSION = "6.6"
+CORE_VERSION = "6.7"
 
 CORE = None
 CORE_ERROR = ""
@@ -135,9 +135,9 @@ else:
 
 # The tool label is the heading of the Geoprocessing pane, so it is also the
 # one place where a user can see which build is installed: a screenshot of the
-# dialog says "6.6" or it does not. build-help.py reads this same string for
+# dialog says "6.7" or it does not. build-help.py reads this same string for
 # the XML documentation, so the label and the help cannot drift apart.
-TOOL_LABEL = "Build a flow map page (6.6)"
+TOOL_LABEL = "Build a flow map page (6.7)"
 
 PARAMETERS = (
     ("flows", "Flow table or layer", "TABLE", True, "Input", ""),
@@ -199,8 +199,24 @@ PLAIN_TYPES = {
     "BOOL": "GPBoolean",
 }
 
-# Every column parameter, and the dataset its drop-down is read from. A
-# column parameter is greyed out until that dataset exists.
+# A column drop-down always has something in it, even before a table has been
+# chosen. Pro draws a GPString parameter whose filter is "Any" - or whose value
+# list is empty - as a plain text box with no arrow, and a text box is how a
+# column gets typed by hand and how a typo gets into a run. So each list holds
+# a placeholder until its dataset can be read, the parameter is never emptied,
+# and a placeholder is never passed to the engine as if it were a column.
+PLACEHOLDER_NO_FLOWS = "(choose the flow table or layer first)"
+PLACEHOLDER_NO_PLACES = "(choose the places layer first)"
+PLACEHOLDER_NO_BOUNDS = "(choose the outline layer first)"
+PLACEHOLDER_NO_COLUMNS = "(no column could be read from this table)"
+PLACEHOLDERS = (
+    PLACEHOLDER_NO_FLOWS,
+    PLACEHOLDER_NO_PLACES,
+    PLACEHOLDER_NO_BOUNDS,
+    PLACEHOLDER_NO_COLUMNS,
+)
+
+# Every column parameter, and the dataset its drop-down is read from.
 COLUMN_SOURCES = {
     "o_name": "flows",
     "d_name": "flows",
@@ -436,7 +452,7 @@ class BuildFlowMapPage(object):
     def __init__(self):
         self.label = TOOL_LABEL
         self.description = (
-            "Version 6.6. Read a flow table, resolve the places, and write one HTML file "
+            "Version 6.7. Read a flow table, resolve the places, and write one HTML file "
             "that draws an animated flow map. The page works offline, needs no "
             "API key, and can export GIF, video, SHP, GeoJSON, GeoParquet and "
             "CSV. The flows can also be added to the current map as a "
@@ -518,12 +534,14 @@ class BuildFlowMapPage(object):
                 # JSON file, which is how a dialog ends up with six boxes to
                 # type in.
                 #
-                # The list goes in first and the type second, on purpose: Pro
-                # resets a filter to "Any" when the list is replaced while the
-                # parameter has no items, and a column parameter whose filter
-                # is "Any" is drawn as a text box - which is exactly what a
-                # pane full of empty boxes is.
-                self._force_value_list(param, [""])
+                # A column parameter is a drop-down from the first moment the
+                # pane is drawn, so the list is never empty: it holds the
+                # placeholder that tells the user to choose a table first. The
+                # list goes in before the type, on purpose - Pro resets a
+                # filter to "Any" when the list is replaced while the
+                # parameter has no items, and a filter of "Any" is drawn as a
+                # text box, which is exactly what a pane of empty boxes is.
+                self._sync_columns(param, [], COLUMN_SOURCES.get(name, "flows"))
             params.append(param)
 
         by_name = {p.name: p for p in params}
@@ -538,13 +556,6 @@ class BuildFlowMapPage(object):
             by_name["out_json"].filter.list = ["json"]
         except Exception:
             pass
-        # a column drop-down stays shut until there is a dataset to read
-        for name, source in COLUMN_SOURCES.items():
-            if name in by_name and source:
-                try:
-                    by_name[name].enabled = False
-                except Exception:
-                    pass
         return params
 
     # ------------------------------------------------------------- reading
@@ -552,6 +563,32 @@ class BuildFlowMapPage(object):
     def _text(param):
         value = param.valueAsText
         return (value or "").strip()
+
+    @staticmethod
+    def _placeholder_for(source):
+        """The words a column drop-down shows before its dataset exists."""
+        if source == "places":
+            return PLACEHOLDER_NO_PLACES
+        if source in ("bounds_fine", "bounds_coarse"):
+            return PLACEHOLDER_NO_BOUNDS
+        return PLACEHOLDER_NO_FLOWS
+
+    @staticmethod
+    def _is_placeholder(text):
+        return str(text or "").strip() in PLACEHOLDERS
+
+    def _column(self, by_name, name):
+        """A column chosen in a drop-down, never a placeholder.
+
+        Every place that reads a column goes through here, so the words
+        "choose the flow table first" can never end up as a field name in a
+        cursor - the one way a placeholder could do harm.
+        """
+        param = by_name.get(name)
+        if param is None:
+            return ""
+        text = self._text(param)
+        return "" if self._is_placeholder(text) else text
 
     def _columns_of(self, dataset):
         """The columns of a dataset, whatever kind of dataset it is.
@@ -733,8 +770,7 @@ class BuildFlowMapPage(object):
         mapping = {}
         for role in ROLES_IN_CORE:
             param_name = PARAM_FOR_ROLE.get(role)
-            param = by_name.get(param_name) if param_name else None
-            mapping[role] = self._text(param) if param is not None else ""
+            mapping[role] = self._column(by_name, param_name) if param_name else ""
         return mapping
 
     # -------------------------------------------------------------- guessing
@@ -769,12 +805,46 @@ class BuildFlowMapPage(object):
                 continue
             dataset = by_name.get(source)
             dataset = dataset.value if dataset is not None else None
-            self._sync_columns(param, self._columns_of(dataset) if dataset else [])
+            columns = self._columns_of(dataset) if dataset else []
+            self._sync_columns(param, columns, source, dataset_present=bool(dataset))
         # the last word: a column parameter is a drop-down, on every pass
+        self._keep_lists(by_name)
+
+    def _keep_lists(self, by_name):
+        """Assert, on every callback, that the column parameters are lists.
+
+        Pro is free to rebuild a parameter between two calls to the dialog -
+        and a value list becomes a text box when its filter type goes back to
+        "Any" or its list is emptied. Both are repaired here, and the ones
+        that could not be repaired are named on the table parameter instead of
+        being left for the user to discover.
+        """
+        broken = []
         for name in COLUMN_SOURCES:
             param = by_name.get(name)
-            if param is not None:
+            if param is None:
+                continue
+            try:
+                kind = str(getattr(param.filter, "type", "") or "")
+                items = list(getattr(param.filter, "list", None) or [])
+            except Exception:
+                continue
+            if kind != "ValueList" or not items:
                 self._force_value_list(param)
+                try:
+                    kind = str(getattr(param.filter, "type", "") or "")
+                    items = list(getattr(param.filter, "list", None) or [])
+                except Exception:
+                    continue
+            if kind != "ValueList" or not items:
+                broken.append(name)
+        flows = by_name.get("flows")
+        if flows is not None and broken:
+            flows.setWarningMessage(
+                "Pro refused the column lists for: %s. They are text boxes in "
+                "this session; type a column name exactly, or reopen the tool. "
+                "Nothing else is affected." % ", ".join(broken)
+            )
 
     @staticmethod
     def _force_value_list(param, options=None):
@@ -811,36 +881,92 @@ class BuildFlowMapPage(object):
                 pass
         return False
 
-    def _sync_columns(self, param, columns):
+    def _sync_columns(self, param, columns, source="flows", dataset_present=False):
         """Fill one column drop-down from the dataset it belongs to.
 
-        The list always starts with an empty entry, so a column can be cleared;
-        the parameter is greyed out while there is no dataset to read; and a
-        column the new dataset does not have is dropped instead of being sent
-        to the engine as a name that does not exist.
+        Three rules, and each one is a way a pane ends up full of text boxes:
+
+        - the list is **never empty**: with no dataset it holds a placeholder,
+          because Pro draws an empty value list as a plain text box;
+        - the list is real column names, read from the dataset the parameter
+          depends on, so a column can be picked and never typed;
+        - the parameter stays **enabled**, so the arrow Pro draws for a value
+          list is drawn - a disabled parameter is the other way a drop-down
+          looks like a box.
+
+        A column the new dataset does not have is dropped instead of being
+        sent to the engine as a name that does not exist.
         """
         if param is None:
             return
-        options = [""] + [name for name in columns]
+        columns = [name for name in columns if name]
+        if columns:
+            options = [""] + columns
+        elif dataset_present:
+            # a dataset is chosen but Pro returns no field for it: say that,
+            # rather than asking for a table that is already there
+            options = [PLACEHOLDER_NO_COLUMNS]
+        else:
+            options = [self._placeholder_for(source)]
         # list, then type: a replaced list can reset the type to "Any"
         self._force_value_list(param, options)
-        if not columns:
-            try:
-                param.enabled = False
-                param.value = None
-            except Exception:
-                pass
-            return
         try:
             param.enabled = True
         except Exception:
             pass
         value = self._text(param)
+        if not columns:
+            if value and not self._is_placeholder(value):
+                try:
+                    param.value = None
+                except Exception:
+                    pass
+            return
         if value and value not in columns:
             try:
                 param.value = None
             except Exception:
                 pass
+        self._force_value_list(param)
+
+    def _leave_origin_unnamed(self, by_name, sample):
+        """Do not weld the destination's name onto an origin at another point.
+
+        A table with one name column and two coordinate pairs is the shape that
+        produced the invisible flows: the origin borrowed the destination's
+        name, both ends resolved to one dot, and 36 rows gave 36 dots and no
+        line. When the sample shows that the two pairs differ, the origin is
+        left unnamed - it is labelled by its position, which is what it is -
+        and the flow stays a line between two places.
+
+        A choice the user made is never undone: ``altered`` means a human
+        picked that column, and a human outranks a guess.
+        """
+        if not CORE or not sample:
+            return
+        o_name = by_name.get("o_name")
+        d_name = by_name.get("d_name")
+        if o_name is None or d_name is None or o_name.altered:
+            return
+        mapping = self._mapping_from(by_name)
+        if not mapping.get("oName") or mapping.get("oName") != mapping.get("dName"):
+            return
+        if not all(mapping.get(key) for key in ("oLon", "oLat", "dLon", "dLat")):
+            return
+        for row in sample:
+            x1 = CORE.to_number(row.get(mapping["oLon"]))
+            y1 = CORE.to_number(row.get(mapping["oLat"]))
+            x2 = CORE.to_number(row.get(mapping["dLon"]))
+            y2 = CORE.to_number(row.get(mapping["dLat"]))
+            if None in (x1, y1, x2, y2):
+                continue
+            if abs(x1 - x2) > 1e-4 or abs(y1 - y2) > 1e-4:
+                try:
+                    o_name.value = None
+                except Exception:
+                    pass
+                self._force_value_list(o_name)
+                return
 
     def _apply_pairing(self, mapping, sample):
         """Swap the destination columns if the numbers say they are crossed."""
@@ -909,6 +1035,9 @@ class BuildFlowMapPage(object):
                 # object whose str() is "<MappingTableObject object at 0x...>"
                 title.value = self._title_from(self._text(flows))
 
+        # 2b. one name column does not name both ends when they are two points
+        self._leave_origin_unnamed(by_name, sample)
+
         # 3. the value column decides what the unit is called, when unset
         unit = by_name.get("unit")
         value_column = self._text(by_name.get("value")) if by_name.get("value") else ""
@@ -944,6 +1073,10 @@ class BuildFlowMapPage(object):
                 param.setErrorMessage(finding.get("text") or "")
             elif finding.get("level") == "warning":
                 param.setWarningMessage(finding.get("text") or "")
+
+        # assigning a value can put the filter type back to "Any" on some
+        # builds, so the drop-downs are asserted again after the guessing
+        self._keep_lists(by_name)
 
     def updateParameters(self, parameters):
         """Never let a guess break the dialog: a red dot here helps nobody."""
@@ -1090,8 +1223,8 @@ class BuildFlowMapPage(object):
         if by_name.get("places") is not None and by_name["places"].value:
             places = self._read_places(
                 by_name["places"].valueAsText,
-                self._text(by_name.get("places_name")),
-                self._text(by_name.get("places_group")),
+                self._column(by_name, "places_name"),
+                self._column(by_name, "places_group"),
             )
             _say(messages, "  %d places to look names up in" % len(places))
 
@@ -1102,7 +1235,7 @@ class BuildFlowMapPage(object):
         ):
             if by_name.get(name_param) is None or not by_name[name_param].value:
                 continue
-            name_column = self._text(by_name.get("%s_name" % name_param))
+            name_column = self._column(by_name, "%s_name" % name_param)
             if not name_column:
                 raise arcpy.ExecuteError(
                     "Choose the name column of the %s." % label

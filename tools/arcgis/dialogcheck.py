@@ -164,10 +164,17 @@ def check_shape(module, label, dataset, expected, disabled=()):
 
     for name in columns_of(module):
         if name not in FLOW_COLUMNS:
+            param = by_name[name]
+            items = list(getattr(param.filter, "list", None) or [])
             check(
-                "%s: %s stays shut, its dataset is not chosen" % (label, name),
-                by_name[name].filter.list == [""] and by_name[name].enabled is False,
-                (by_name[name].filter.list, by_name[name].enabled),
+                "%s: %s is a drop-down before its dataset is chosen" % (label, name),
+                getattr(param.filter, "type", None) == "ValueList" and bool(items),
+                (getattr(param.filter, "type", None), items),
+            )
+            check(
+                "%s: %s says what to choose first instead of a blank box" % (label, name),
+                bool(items) and str(items[0]).startswith("(") and param.enabled is True,
+                (items, param.enabled),
             )
 
     columns = FLOW_COLUMNS
@@ -312,9 +319,16 @@ def check_places_columns(module):
     by_name["flows"].altered = True
     tool.updateParameters(params)
     check(
-        "the places columns are shut with no places layer",
-        by_name["places_name"].filter.list == [""] and by_name["places_name"].enabled is False,
-        (by_name["places_name"].filter.list, by_name["places_name"].enabled),
+        "the places column is a drop-down before the places layer is chosen",
+        getattr(by_name["places_name"].filter, "type", None) == "ValueList"
+        and by_name["places_name"].filter.list == [module.PLACEHOLDER_NO_PLACES],
+        (by_name["places_name"].filter.type, by_name["places_name"].filter.list),
+    )
+    check(
+        "and it asks for the places layer, not for a blank",
+        by_name["places_name"].enabled is True
+        and "places layer" in str(by_name["places_name"].filter.list[0]),
+        (by_name["places_name"].enabled, by_name["places_name"].filter.list),
     )
     by_name["places"].value = "/project/points"
     tool.updateParameters(params)

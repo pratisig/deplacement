@@ -316,9 +316,28 @@ def dialog_checks(module, tool, params, by_name):
         [name for name in columns if "Field" in str(by_name[name].datatype)],
     )
     check(
-        "the column drop-downs are shut until a dataset is chosen",
-        all(by_name[name].enabled is False for name in columns),
-        [name for name in columns if by_name[name].enabled],
+        "every column parameter is a drop-down before any dataset is chosen",
+        all(
+            getattr(by_name[name].filter, "type", None) == "ValueList"
+            and list(getattr(by_name[name].filter, "list", None) or [])
+            for name in columns
+        ),
+        [
+            (name, getattr(by_name[name].filter, "type", None), by_name[name].filter.list)
+            for name in columns
+            if getattr(by_name[name].filter, "type", None) != "ValueList"
+            or not list(getattr(by_name[name].filter, "list", None) or [])
+        ],
+    )
+    check(
+        "and each one says what to choose first, instead of a blank box",
+        all(str(by_name[name].filter.list[0]).startswith("(") for name in columns),
+        [(name, by_name[name].filter.list[0]) for name in columns],
+    )
+    check(
+        "the drop-downs are enabled, so Pro draws their arrow",
+        all(by_name[name].enabled is not False for name in columns),
+        [name for name in columns if by_name[name].enabled is False],
     )
     check("the template filter is HTML", by_name["template"].filter.list == ["html", "htm"], by_name["template"].filter.list)
     check("the dataset filter is JSON", by_name["out_json"].filter.list == ["json"], by_name["out_json"].filter.list)
@@ -365,9 +384,12 @@ def column_checks(tool, params, by_name, json_folder):
     )
     check("the drop-down is open once there is a table", by_name["o_name"].enabled is True)
     check(
-        "the places columns stay shut until a places layer is chosen",
-        by_name["places_name"].filter.list == [""] and by_name["places_name"].enabled is False,
-        (by_name["places_name"].filter.list, by_name["places_name"].enabled),
+        "the places columns are drop-downs before a places layer is chosen",
+        by_name["places_name"].filter.list
+        == [by_name["places_name"].filter.list[0]]
+        and str(by_name["places_name"].filter.list[0]).startswith("(")
+        and getattr(by_name["places_name"].filter, "type", None) == "ValueList",
+        (by_name["places_name"].filter.list, by_name["places_name"].filter.type),
     )
     check("the origin field is guessed from the column names", by_name["o_name"].value == "ORIGIN", by_name["o_name"].value)
     check("the destination field too", by_name["d_name"].value == "DESTINATION", by_name["d_name"].value)
@@ -448,6 +470,127 @@ def column_checks(tool, params, by_name, json_folder):
     )
 
 
+def column_contract_checks(module, out_dir):
+    """The columns must be pickable, never typed.
+
+    The field report, twice: a pane of text boxes with no arrow, holding
+    values that had been typed. A GPString parameter is drawn as a text box
+    whenever its filter type is not "ValueList" or its value list is empty, so
+    the contract checked here is: a list on every parameter, from the first
+    moment the pane exists, filled from the dataset above it, repaired on
+    every callback, and never emptied by a placeholder or by Pro resetting it.
+    """
+    tool = module.Toolbox().tools[0]()
+    params = tool.getParameterInfo()
+    by_name = {p.name: p for p in params}
+    columns = sorted(module.COLUMN_SOURCES)
+
+    check(
+        "all %d column parameters exist" % len(columns),
+        len(columns) == 12,
+        columns,
+    )
+
+    def listable(name):
+        param = by_name[name]
+        return str(getattr(param.filter, "type", "") or ""), list(
+            getattr(param.filter, "list", None) or []
+        )
+
+    kinds = {name: listable(name) for name in columns}
+    check(
+        "every column is a value list from the very first draw",
+        all(kind == "ValueList" for kind, _items in kinds.values()),
+        {name: kind for name, (kind, _items) in kinds.items() if kind != "ValueList"},
+    )
+    check(
+        "no column list is empty, so Pro cannot draw a text box",
+        all(items for _kind, items in kinds.values()),
+        {name: items for name, (_kind, items) in kinds.items() if not items},
+    )
+    check(
+        "each one says what to choose first",
+        all(str(items[0]).startswith("(") for _kind, items in kinds.values()),
+        {name: items for name, (_kind, items) in kinds.items()},
+    )
+    check(
+        "the placeholders are not column names",
+        all(str(items[0]).strip() in module.PLACEHOLDERS for _kind, items in kinds.values()),
+    )
+
+    # choose the table: the flow columns become its columns, and its alone
+    setp(by_name, "flows", FLOWS)
+    tool.updateParameters(params)
+    flows_columns = ["ORIGIN", "DESTINATION", "HOUSEHOLDS", "DATE", "REGION"]
+    for name in ("o_name", "d_name", "value", "date", "o_lon", "o_lat", "d_lon", "d_lat"):
+        kind, items = listable(name)
+        check(
+            "%s offers the table's columns, and nothing else" % name,
+            kind == "ValueList" and items == [""] + flows_columns,
+            (kind, items),
+        )
+    check(
+        "the places column keeps its own placeholder meanwhile",
+        listable("places_name") == ("ValueList", [module.PLACEHOLDER_NO_PLACES]),
+        listable("places_name"),
+    )
+
+    # Pro resets the filter of a parameter it rebuilds; the next callback must
+    # put the drop-down back rather than leave a box behind
+    by_name["o_lon"].filter.type = "Any"
+    by_name["o_lon"].filter.list = []
+    tool.updateMessages(params)
+    kind, items = listable("o_lon")
+    check(
+        "a filter Pro reset to Any is a value list again on the next callback",
+        kind == "ValueList" and items == [""] + flows_columns,
+        (kind, items),
+    )
+    by_name["value"].filter.type = "Any"
+    tool.updateParameters(params)
+    check(
+        "and updateParameters repairs it too",
+        listable("value")[0] == "ValueList" and listable("value")[1] == [""] + flows_columns,
+        listable("value"),
+    )
+
+    # a placeholder picked by mistake must never be used as a column
+    setp(by_name, "o_name", module.PLACEHOLDER_NO_FLOWS)
+    mapping = tool._mapping_from(by_name)
+    check(
+        "a placeholder is never read as a column name",
+        mapping.get("oName") == "",
+        mapping,
+    )
+    check(
+        "and it does not reach an error message as a field",
+        module.PLACEHOLDER_NO_FLOWS not in str(mapping),
+        mapping,
+    )
+    setp(by_name, "o_name", "ORIGIN")
+
+    # a dataset whose columns cannot be read still leaves the pane usable
+    setp(by_name, "flows", "/project/a_table_pro_returns_no_fields_for")
+    tool.updateParameters(params)
+    tool.updateMessages(params)
+    kind, items = listable("d_lon")
+    check(
+        "an unreadable table still leaves drop-downs, not text boxes",
+        kind == "ValueList" and items == [module.PLACEHOLDER_NO_COLUMNS],
+        (kind, items),
+    )
+    check(
+        "and the table parameter says so instead of failing later",
+        bool(by_name["flows"].warningMessage),
+        by_name["flows"].warningMessage,
+    )
+    check(
+        "the message names the table parameter, not a Python error",
+        "columns" in str(by_name["flows"].warningMessage).lower(),
+        by_name["flows"].warningMessage,
+    )
+
+
 def warning_path_checks(module, out_dir):
     """A run whose data produces a warning must not die on the warning.
 
@@ -513,9 +656,29 @@ def failing_table_checks(module, out_dir):
         by_name["value"].value,
     )
     check(
-        "the village column names both ends",
-        (by_name["o_name"].value, by_name["d_name"].value) == ("Village", "Village"),
-        (by_name["o_name"].value, by_name["d_name"].value),
+        "the village column names the destination",
+        by_name["d_name"].value == "Village",
+        by_name["d_name"].value,
+    )
+    check(
+        "and the origin is left unnamed: its two points differ from row to row",
+        by_name["o_name"].value in (None, ""),
+        by_name["o_name"].value,
+    )
+    check(
+        "the origin is still a drop-down after that decision",
+        getattr(by_name["o_name"].filter, "type", None) == "ValueList"
+        and by_name["o_name"].filter.list == [""] + [
+            "Village",
+            "CSI_CASE",
+            "MILDA_distribuees",
+            "Besoins_estimes_1_MILDA_2_personnes",
+            "Lon_dept",
+            "Lat_dept",
+            "Longitude_rep",
+            "Latitude_rep",
+        ],
+        (by_name["o_name"].filter.type, by_name["o_name"].filter.list),
     )
     check(
         "the two coordinate pairs are read in the right order",
@@ -939,6 +1102,11 @@ def run(module, out_html, out_json):
     except stub.ExecuteError as err:
         raised = str(err)
     check("running the mix says what to do", "Unzip the whole FlowMap folder" in raised, raised)
+
+    # ---- the columns are pickable, never typed ------------------------
+    stub.reset()
+    register_layers()
+    column_contract_checks(module, out_dir)
 
     # ---- a warning must not kill the run ------------------------------
     stub.reset()

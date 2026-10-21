@@ -77,9 +77,28 @@ column parameter, in your copy of Pro. The list is filled when you choose the ta
 refilled when you change it, and filled again when the pane is reopened on the
 values of the previous run. The tool reads the columns itself — `ListFields`, then `Describe().fields`, then a cursor, then
 the JSON file behind a layer added from JSON or GeoJSON — so a layer Pro's own
-field control refuses (*"CIMPATH=Map/_name_.json"* is the usual case) still
-gives a full list. A column is greyed out until its dataset exists, and a
-column the new table does not have is dropped rather than sent on.
+field control refuses (*"CIMPath=Map/_name_.json"* is the usual case) still
+gives a full list.
+
+**A column list is never empty, even before a table is chosen.** An empty value
+list is drawn as a plain text box, so before the table exists each list holds a
+placeholder instead — *(choose the flow table or layer first)*, *(choose the
+places layer first)*, *(choose the outline layer first)*, or *(no column could
+be read from this table)* when a table is chosen but Pro returns no field for
+it. The twelve drop-downs are therefore drop-downs from the moment the pane is
+drawn, and their arrow is always there. A placeholder is recognised for what it
+is at every point where a column is read, so it can never be sent to a cursor as
+a field name, and a column the new table does not have is dropped rather than
+sent on. The parameters stay enabled for the same reason: Pro draws the arrow of
+an enabled value list.
+
+**If Pro ever refuses a list, the pane says so.** Some builds rebuild a
+parameter between two callbacks and put its filter type back to `Any`, which is
+the one way this can still become a text box. The type and the list are
+therefore re-asserted at the end of *every* callback — `getParameterInfo`,
+`updateParameters`, `updateMessages` — and if one still cannot be made a list,
+the table parameter carries a warning naming it, instead of leaving a box for
+you to fill by hand.
 
 **Nothing is guessed from a column name alone.** The tool samples 200 rows and
 judges the content: a column of identifiers is never a place name, a text column
@@ -123,18 +142,19 @@ mislabeled export cannot silently draw a map of the wrong hemisphere.
   has no movement to draw, and the page says so in its subtitle — the
   households counted *inside* each place travel round that place's ring —
   instead of promising "each line a flow" over a field of dots.
-- **One name, two coordinate pairs.** An empty *Origin name field* does not copy
-  the destination's name onto the origin: the two ends keep their own
-  coordinates, the unnamed end is labelled by its position, and the flow stays a
-  line between two places. Copying the name would weld the two ends into one
-  dot — 36 rows, 36 dots, not one line.
+- **One name, two coordinate pairs.** A table with a single name column and two
+  coordinate pairs gets its *Origin name field* left empty by the guess: the
+  origin keeps its own position and is labelled by it, and the flow stays a line
+  between two places. Copying the destination's name onto that origin would weld
+  the two ends into one dot — 36 rows, 36 dots, not one line. A column you pick
+  yourself is never undone.
 - **When the two ends really are one point.** If the origin and destination
   coordinates match in every row, the page has no line to draw. It says so:
   the tool warns with the two column pairs by name, the dialog shows the same
   warning next to the coordinate fields, and the page repeats it under the map.
 - **Which build made the page.** The tool is labelled `Build a flow map page
-  (6.6)`, each run opens with `FlowMap 6.6 - engine 6.6`, and the page's source
-  line ends with `Built with FlowMap 6.6`. A toolbox left beside an older
+  (6.7)`, each run opens with `FlowMap 6.7 - engine 6.7`, and the page's source
+  line ends with `Built with FlowMap 6.7`. A toolbox left beside an older
   `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
@@ -275,14 +295,17 @@ tested.
   dataset, the page, and what a column holds — identifiers, metres, readable
   dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 110 checks): the 28 parameters, the drop-down
-  lists including a JSON layer, the folder and page name, the guessing on the
+  `tools/arcgis/toolcheck.py`, 135 checks): the 28 parameters, the column
+  drop-downs (a placeholder before any table, the table's own columns after,
+  a filter Pro reset to "Any" repaired on the next callback, a placeholder
+  never read as a field), the lists including a JSON layer, the folder and
+  page name, the guessing on the
   table that failed in the field, the swap of two mislabeled coordinate
   columns, cursors, geometry parts, the WGS84 request, messages and warnings,
   the animation layer (feature class, fields, one line per flow, dates, time
   enabled, `.lyrx`), a new toolbox left beside an old engine, and every failure
   path;
-- checks the pane itself (`tools/arcgis/dialogcheck.py`, 437 checks): on a
+- checks the pane itself (`tools/arcgis/dialogcheck.py`, 462 checks): on a
   feature table, a standalone table, a point layer, a shapefile and a layer
   added from JSON, every column parameter is a value list, holds the columns
   of the dataset chosen above it, follows the dataset when it changes, drops a
@@ -290,7 +313,7 @@ tested.
   (`updateMessages` alone), keeps its type as a value list when Pro resets it
   or rebuilds it from an empty list, and accepts every item clicked in it;
 - checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
-  25 checks) and that the help XML matches the toolbox
+  28 checks) and that the help XML matches the toolbox
   (`python3 tools/arcgis/build-help.py --check`);
 - loads the page the toolbox wrote in the project's own browser harness and
   compares it, number for number, with the dataset the toolbox reported.

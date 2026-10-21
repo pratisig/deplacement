@@ -8,7 +8,7 @@
     <ModDate>20261021</ModDate>
     <ModTime>00000000</ModTime>
   </Esri>
-  <tool name="BuildFlowMapPage" displayname="Build a flow map page (6.6)" toolboxalias="flowmap">
+  <tool name="BuildFlowMapPage" displayname="Build a flow map page (6.7)" toolboxalias="flowmap">
     <summary>Write a self-contained flow-map page, and optionally add the flows to the map for the Time Slider.</summary>
     <parameters>
       <param name="flows" displayname="Flow table or layer" datatype="GPTableView" direction="Input" expression="flows" parameterType="Required">

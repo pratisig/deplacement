@@ -204,6 +204,17 @@ def check_dialog(stub):
         not text_boxes,
         ", ".join(text_boxes),
     )
+    check(
+        "every column drop-down already holds something to choose",
+        all(list(getattr(by_name[name].filter, "list", None) or []) for name in columns),
+        ", ".join(name for name in columns if not list(getattr(by_name[name].filter, "list", None) or [])),
+    )
+    check(
+        "and they are enabled, so Pro draws their arrow",
+        all(by_name[name].enabled is not False for name in columns),
+        ", ".join(name for name in columns if by_name[name].enabled is False),
+    )
+    ok("%d column drop-downs, all of them value lists" % len(columns))
     check_help(module.PARAMETERS)
     return module, tool, parameters, by_name
 
