@@ -27,6 +27,7 @@ const SCRIPTS = [
   'table.js',
   'shpread.js',
   'sources.js',
+  'countries.js',
   'dataset.js',
   'projection.js',
   'tiles.js',
@@ -58,9 +59,18 @@ const example = {
   admin2: JSON.parse(read('data/boundaries-adm2.json')),
 };
 
+/* The countries of the world, coarse: the page reads a place's coordinates to
+   find which country it is in, then downloads that country's outlines. It is
+   embedded for the same reason as everything else - the file works offline,
+   and the guess is made without a request. */
+const COUNTRIES = JSON.parse(read('data/countries.json'));
+
 const dataBlocks = `/* The built-in example. Everything below works from this shape, and
    src/js/sources.js builds the same shape from a table the user loads. */
-const EXAMPLE = ${min(example)};`;
+const EXAMPLE = ${min(example)};
+
+/* Coarse country outlines, for finding the countries the data lies in. */
+const WORLDMAP = ${min(COUNTRIES)};`;
 
 const appBlocks = [read(VENDOR).trim(), ...SCRIPTS.map(f => read(`src/js/${f}`).trim())].join(
   '\n\n',

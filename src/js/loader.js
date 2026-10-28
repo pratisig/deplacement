@@ -94,6 +94,7 @@ function renderFields() {
     '<label for="oOutLabel">Departure quantity name<input id="oOutLabel" type="text" placeholder="departures"></label>' +
     '<label for="oInLabel">Arrival quantity name<input id="oInLabel" type="text" placeholder="arrivals"></label>' +
     '<label for="oSource">Source note<input id="oSource" type="text" placeholder="where the data comes from"></label>' +
+    '<label for="oCountry">Countries (ISO codes, only to force them)<input id="oCountry" type="text" placeholder="YEM, MLI - found from the coordinates"></label>' +
     '<label for="oDateMode">Dates are<select id="oDateMode">' +
     [
       ['auto', 'detected automatically'],
@@ -110,13 +111,27 @@ function renderFields() {
     '<label for="oStart">First date<input id="oStart" type="date"' +
     (dateIsNumber ? '' : ' disabled') +
     '></label>' +
-    '</div>';
-  ['oTitle', 'oSubtitle', 'oUnit', 'oNode', 'oGroup', 'oOutLabel', 'oInLabel', 'oSource'].forEach(
-    id =>
-      $('#' + id).addEventListener('input', ev => {
-        loader.options[id.slice(1)] = ev.target.value;
-        validateLoader();
-      }),
+    '</div>' +
+    '<label class="chk"><input type="checkbox" id="optAutoBounds" checked> ' +
+    'Download the administrative boundaries of the countries in the data</label>' +
+    '<p class="hint" id="autoBm">The country is found from the coordinates, then its regions ' +
+    'and districts come from geoBoundaries (open data, no key). Offline, the national outline ' +
+    'carried by the page is used instead.</p>';
+  [
+    'oTitle',
+    'oSubtitle',
+    'oUnit',
+    'oNode',
+    'oGroup',
+    'oOutLabel',
+    'oInLabel',
+    'oSource',
+    'oCountry',
+  ].forEach(id =>
+    $('#' + id).addEventListener('input', ev => {
+      loader.options[id.slice(1)] = ev.target.value;
+      validateLoader();
+    }),
   );
   $('#oDateMode').addEventListener('change', ev => {
     const mode = ev.target.value;
@@ -301,6 +316,7 @@ async function takeShapefile(files, slot) {
       inLabel: '',
       outLabel: '',
       source: '',
+      countries: '',
     };
     loader.theme = null;
     if ($('#themeList')) renderThemeValues();
@@ -346,6 +362,7 @@ async function takeTable(file) {
       inLabel: '',
       outLabel: '',
       source: '',
+      countries: '',
     };
     loader.theme = null;
     if ($('#themeList')) renderThemeValues();
@@ -397,12 +414,15 @@ async function takeBoundary(file) {
 }
 
 /**
- * Read a values-by-area file: a polygon GeoJSON carrying the value in its
- * properties, or a table of area names and values matched to the boundaries.
+ * Everything about a values-by-area file that does not depend on which column
+ * holds the value: the shapes (or the names), and every column that could be
+ * read as a number. The dialog shows those columns as a choice, because the
+ * number being mapped must be visible and must be nameable for the legend.
  */
-function themeRowsFromText(text, fileName) {
+function themeProfileFromText(text, fileName) {
   const trimmed = String(text || '').trim();
   const looksJSON = /^[{[]/.test(trimmed);
+  const fields = [];
   if (looksJSON) {
     let data;
     try {
@@ -413,29 +433,39 @@ function themeRowsFromText(text, fileName) {
     const feats = data.features || (data.type === 'Feature' ? [data] : []);
     if (!feats.length) throw new Error('Expected a GeoJSON FeatureCollection of areas.');
     const parsed = parseBoundaryGeoJSON(trimmed, {});
-    const props = feats[0].properties || {};
-    const numeric = Object.keys(props).filter(
-      k =>
-        k !== parsed.nameProp && String(props[k] ?? '').trim() !== '' && Number.isFinite(+props[k]),
-    );
-    const col =
-      numeric.find(k => /val|total|count|pop|nombre|valeur|amount|quant/i.test(k)) ||
-      numeric.find(k => !/code|id$|^id/i.test(k)) ||
-      numeric[0] ||
-      '';
-    if (!col)
-      throw new Error(
-        'The polygon file has no numeric property to read a value from — name the column value, total, count…',
-      );
+    // a column counts when most of the areas carry a number in it
+    const keys = [];
+    for (const f of feats.slice(0, 200))
+      for (const k of Object.keys(f.properties || {}))
+        if (!keys.includes(k) && k !== parsed.nameProp) keys.push(k);
+    for (const k of keys) {
+      let seen = 0,
+        num = 0;
+      for (const f of feats.slice(0, 200)) {
+        const v = (f.properties || {})[k];
+        if (v === null || v === undefined || String(v).trim() === '') continue;
+        seen++;
+        if (Number.isFinite(+v)) num++;
+      }
+      if (seen && num / seen >= 0.8) fields.push({ name: k, numeric: true });
+    }
     const raw = new Map(
       feats.map(f => [keyName(String(f.properties?.[parsed.nameProp] ?? '')), f.properties || {}]),
     );
-    const rows = parsed.features.map(f => ({
+    const shapes = parsed.features.map(f => ({
       name: f.name,
       rings: f.rings,
-      value: Number(raw.get(keyName(f.name))?.[col]),
+      props: raw.get(keyName(f.name)) || {},
     }));
-    return { rows, label: col, fileName, count: rows.length };
+    return {
+      kind: 'geojson',
+      text: trimmed,
+      fileName,
+      nameProp: parsed.nameProp,
+      fields,
+      shapes,
+      count: shapes.length,
+    };
   }
   const table = parseTable(trimmed, fileName);
   if (!table.rows.length) throw new Error('That area file has no data rows.');
@@ -446,20 +476,72 @@ function themeRowsFromText(text, fileName) {
     throw new Error(
       'No area name column found — the file needs a column of area names (name, area, district…).',
     );
-  const valueCol =
-    headers.find(
-      h =>
-        h !== nameCol &&
-        columnIsNumeric(table.rows, h) &&
-        /val|total|count|pop|nombre|valeur|amount|quant/i.test(h),
-    ) ||
-    headers.find(h => h !== nameCol && columnIsNumeric(table.rows, h)) ||
-    '';
-  if (!valueCol) throw new Error('No numeric value column found in the area file.');
+  for (const h of headers)
+    if (h !== nameCol && columnIsNumeric(table.rows, h)) fields.push({ name: h, numeric: true });
   const rows = table.rows
-    .map(r => ({ name: String(r[nameCol] ?? '').trim(), value: r[valueCol] }))
+    .map(r => ({ name: String(r[nameCol] ?? '').trim(), row: r }))
     .filter(r => r.name);
-  return { rows, label: valueCol, fileName, count: rows.length };
+  return { kind: 'table', text: trimmed, fileName, nameCol, fields, rows, count: rows.length };
+}
+
+/** The column to start on: a name that says "value", else the first numeric one. */
+function guessThemeField(profile) {
+  const names = profile.fields.map(f => f.name);
+  return (
+    names.find(k => /^(val|value|valeur|total|count|nombre|amount|quant)/i.test(k)) ||
+    names.find(k => /val|total|count|pop|nombre|valeur|amount|quant/i.test(k)) ||
+    names.find(k => !/code|id$|^id/i.test(k)) ||
+    names[0] ||
+    ''
+  );
+}
+
+/** The rows for one chosen column: {name, value, rings?} per area. */
+function themeRowsFor(profile, field) {
+  if (!field) return [];
+  if (profile.kind === 'geojson')
+    return profile.shapes
+      .map(s => ({ name: s.name, rings: s.rings, value: Number(s.props[field]) }))
+      .filter(r => Number.isFinite(r.value));
+  return profile.rows
+    .map(r => ({ name: r.name, value: Number(String(r.row[field] ?? '').replace(/[\s,]/g, '')) }))
+    .filter(r => Number.isFinite(r.value));
+}
+
+/** A column's distinct sample values, for the hint under the choice. */
+function themeFieldSample(profile, field) {
+  const values =
+    profile.kind === 'geojson'
+      ? profile.shapes.map(s => Number(s.props[field])).filter(Number.isFinite)
+      : profile.rows
+          .map(r => Number(String(r.row[field] ?? '').replace(/[\s,]/g, '')))
+          .filter(Number.isFinite);
+  if (!values.length) return '';
+  const sorted = values.slice().sort((a, b) => a - b);
+  return (
+    values.length +
+    ' areas with a number, from ' +
+    fmt(sorted[0]) +
+    ' to ' +
+    fmt(sorted[sorted.length - 1])
+  );
+}
+
+/**
+ * Read a values-by-area file: a polygon GeoJSON carrying the value in its
+ * properties, or a table of area names and values matched to the boundaries.
+ */
+function themeRowsFromText(text, fileName, field) {
+  const profile = themeProfileFromText(text, fileName);
+  const chosen = field || guessThemeField(profile);
+  if (!chosen)
+    throw new Error(
+      profile.kind === 'geojson'
+        ? 'The polygon file has no numeric property to read a value from — add a column with the number, or load a table of area names and values.'
+        : 'No numeric value column found in the area file.',
+    );
+  const rows = themeRowsFor(profile, chosen);
+  return { rows, label: chosen, field: chosen, profile, fileName, count: rows.length };
 }
 
 function renderThemeValues() {
@@ -469,14 +551,61 @@ function renderThemeValues() {
     box.innerHTML = '';
     return;
   }
+  const th = loader.theme;
+  const choices = (th.profile.fields || []).map(f => f.name);
   box.innerHTML =
-    '<div class="bound"><b>' +
-    esc(loader.theme.fileName) +
+    '<div class="bound themechoice"><b>' +
+    esc(th.fileName) +
     '</b> — ' +
-    loader.theme.count +
-    ' areas, value column "' +
-    esc(loader.theme.label) +
-    '"<button class="act tiny" data-rmtheme="1" type="button">Remove</button></div>';
+    th.count +
+    ' areas' +
+    '<label>Value column<select id="thField">' +
+    choices
+      .map(
+        name =>
+          '<option value="' +
+          esc(name) +
+          '"' +
+          (name === th.field ? ' selected' : '') +
+          '>' +
+          esc(name) +
+          '</option>',
+      )
+      .join('') +
+    '</select></label>' +
+    '<label>Legend title<input id="thLabel" type="text" value="' +
+    esc(th.label) +
+    '" placeholder="' +
+    esc(th.field) +
+    '"></label>' +
+    '<span class="thhint" id="thHint">' +
+    esc(themeFieldSample(th.profile, th.field)) +
+    '</span>' +
+    '<button class="act tiny" data-rmtheme="1" type="button">Remove</button></div>';
+  const select = box.querySelector('#thField');
+  if (select)
+    select.addEventListener('change', ev => {
+      const field = (ev && ev.target ? ev.target.value : '') || select.value;
+      const rows = themeRowsFor(th.profile, field);
+      // the legend title follows the column unless the author renamed it
+      const wasAuto = !th.label || th.label === th.field;
+      loader.theme = {
+        ...th,
+        field,
+        rows,
+        count: rows.length,
+        label: wasAuto ? field : th.label,
+      };
+      $('#fileThemeInfo').textContent =
+        th.fileName + ' — ' + rows.length + ' areas, value column "' + field + '"';
+      renderThemeValues();
+      validateLoader();
+    });
+  const label = box.querySelector('#thLabel');
+  if (label)
+    label.addEventListener('input', ev => {
+      loader.theme.label = ev.target.value;
+    });
   box.querySelectorAll('button[data-rmtheme]').forEach(btn =>
     btn.addEventListener('click', () => {
       loader.theme = null;
@@ -511,7 +640,63 @@ async function takeTheme(file) {
   }
 }
 
-function buildFromLoader() {
+/**
+ * The boundaries to build with: the files the user chose, or — when there is
+ * none — the outlines of the countries the coordinates fall in, found in the
+ * page and downloaded from geoBoundaries. Anything downloaded is kept as a
+ * normal boundary layer, so the list in the dialog shows it and a second build
+ * does not fetch it again.
+ */
+async function boundariesForBuild() {
+  if (loader.boundaries.length) return { boundaries: loader.boundaries, messages: [] };
+  // the box is on by default; an absent control (a page built without it) or a
+  // cleared one both mean "do not download"
+  const box = $('#optAutoBounds');
+  if (box && box.checked === false) return { boundaries: [], messages: [] };
+  const points = pointsOfTable(loader.table, loader.mapping);
+  const typed = parseCountryCodes(loader.options.countries || '');
+  let isos = typed.codes;
+  let messages = [];
+  if (typed.unknown.length)
+    messages.push(
+      'Not a country code: ' + typed.unknown.join(', ') + ' (use ISO codes such as YEM).',
+    );
+  // nothing to place: a name-only table needs a boundary file, and the mapping
+  // form already says so -- do not add a country note on top
+  if (!points.length) return { boundaries: [], messages };
+  if (!isos.length) isos = countriesOfPoints(points);
+  if (!isos.length)
+    return {
+      boundaries: [],
+      messages: messages.concat([
+        'No country could be found from these coordinates: no outline was downloaded. Add a boundary file, or give the countries as ISO codes.',
+      ]),
+    };
+  const status = msg => {
+    const line = $('#autoBm');
+    if (line) line.textContent = msg;
+    feedback(msg);
+  };
+  status('Country found: ' + isos.map(countryName).join(', ') + ' — downloading its outlines…');
+  const got = await fetchCountryBoundaries(isos, {
+    extent: extentOfPoints(points),
+    onStatus: status,
+  });
+  messages = messages.concat(got.messages);
+  for (const layer of got.layers) loader.boundaries.push(layer);
+  if (got.layers.length) renderBoundaries();
+  const names = got.layers.map(l => l.level + ' ' + l.parsed.count + ' areas').join(', ');
+  status(
+    got.offline
+      ? 'Offline: the national outline of ' +
+          isos.map(countryName).join(', ') +
+          ' is drawn instead of the downloaded regions and districts.'
+      : 'Boundaries for ' + isos.map(countryName).join(', ') + ': ' + names + '.',
+  );
+  return { boundaries: loader.boundaries, messages };
+}
+
+async function buildFromLoader() {
   try {
     const opts = {
       title: loader.options.title || undefined,
@@ -526,13 +711,16 @@ function buildFromLoader() {
       dateMode: loader.options.dateMode,
       dateStart: loader.options.dateStart,
     };
+    $('#bBuild').disabled = true;
+    const found = await boundariesForBuild();
     const { source, warnings } = assembleDataset({
       table: loader.table,
       mapping: loader.mapping,
-      boundaries: loader.boundaries,
+      boundaries: found.boundaries,
       options: opts,
       theme: loader.theme,
     });
+    warnings.push(...found.messages);
     loadSource(source);
     setBlend(0);
     setLimit(source.admin2 ? 'districts' : source.admin1 ? 'governorates' : 'off');
@@ -551,6 +739,9 @@ function buildFromLoader() {
   } catch (e) {
     $('#err').textContent = e.message;
     $('#err').hidden = false;
+    feedback(e.message, true);
+  } finally {
+    validateLoader();
   }
 }
 

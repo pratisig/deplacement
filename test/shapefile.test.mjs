@@ -256,7 +256,7 @@ test('outlines from a shapefile let a name-only table be mapped', async () => {
       'from,to,date,households\nAlpha,Beta,2026-01-04,10\nBeta,Alpha,2026-01-11,5\n',
     ),
   ]);
-  p.T.buildFromLoader();
+  await p.T.buildFromLoader();
   const D = p.T.D();
   assert.equal(D.nodes.length, 2, 'Alpha and Beta, found by name');
   assert.equal(D.edges.length, 2);

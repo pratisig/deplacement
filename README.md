@@ -57,6 +57,16 @@ it empty and every figure uses the single value, as before.
 - **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
   up to two levels, or a polygon shapefile). Places are then matched to areas by name — accents, casing
   and spelling wobbles tolerated — and the areas become the limits layer.
+- **Or let the limits come by themselves.** Load only the flow table and the
+  page reads the country from the coordinates — 242 countries are embedded, so
+  it works offline — then fetches that country's regions and districts from
+  [geoBoundaries](https://www.geoboundaries.org/), clipped to the extent of
+  your points. Yemeni coordinates give Yemen's ADM1 and ADM2, so the group
+  names, the limits button and the summary work with nothing else to load. When
+  the download cannot happen (no network, firewall, a country the service does
+  not cover) the page draws the embedded national outline instead and says why
+  in the dialog. Type `YEM` — or `YEM, JOR` — in **Countries** to override the
+  detection, or untick **Automatic limits** to load no boundaries at all.
 - **A row can be its own origin and destination** (a self-loop): that counts as
   movement inside the place, which is how the example treats internal
   displacement.
@@ -66,10 +76,14 @@ it empty and every figure uses the single value, as before.
   distributed_) and the source note. They reach the legend, the tooltips, the
   panels and the PDF.
 - **Values by area** (optional): a polygon layer carrying a number, or a plain
-  table of area names and values. Areas are matched to the boundary names (or
-  keep their own outlines) and drawn under the flows, with their own summary
-  card: total, areas with a value, the maximum, the top areas and their share,
-  and the split by group.
+  table of area names and values. **The value column is chosen, not guessed
+  silently**: once the layer is loaded the dialog lists every numeric column in
+  a **Value column** drop-down, shows a sample range beside it (`1 240 – 48
+900, 214 areas`), and offers a **Legend title** so the key says what is
+  mapped — it follows the column until you rename it. Areas are matched to the
+  boundary names (or keep their own outlines) and drawn under the flows, with
+  their own summary card: total, areas with a value, the maximum, the top areas
+  and their share, and the split by group.
 - Press **Template CSV** for a file you can fill in.
 
 Everything downstream follows the file: the title, the unit in the stats line,
@@ -235,6 +249,7 @@ src/js/                  the app, in load order (no imports; build.mjs concatena
   geo.js                 ring areas, centroids, simplification, point-in-polygon
   table.js               CSV/TSV/JSON/GeoJSON reader and column detection
   shpread.js             shapefile and ZIP reader (.shp/.dbf -> GeoJSON)
+  countries.js           country of a point (embedded outlines) -> geoBoundaries
   sources.js             table + boundaries -> dataset, geocoding by name
   dataset.js             the active dataset, normalising boundary layers
   projection.js          Web Mercator, tiling, limits projection
@@ -261,6 +276,7 @@ arcgis/                  the ArcGIS Pro side: FlowMap.pyt + flowmap_core.py
                          (see arcgis/README.md)
 test/                    Node test suite: stubbed DOM, canvas, tiles, blobs
                          — nothing is injected that the page does not carry itself
+tools/build-countries.mjs   rebuild data/countries.json from Natural Earth
 tools/build-boundaries.mjs  rebuild the example boundaries from source
 tools/render-map.mjs        render any built page to a PNG for eyeballing
 tools/verify-exports.py     read the exports back with pyarrow/pyshp/Pillow/geopandas
@@ -279,6 +295,7 @@ npm test                # the whole suite: page, loader, exports, boundaries, Ar
 npm run render          # write tools/out/map-check.png
 npm run vendor          # rebuild the inlined d3-force bundle
 npm run boundaries      # rebuild data/boundaries-*.json from source
+npm run countries       # rebuild data/countries.json (Natural Earth, 242 countries)
 npm run arcgis:selftest # the ArcGIS core + the toolbox, without ArcGIS
 npm run package:arcgis  # dist/arcgis-pro/ + dist/FlowMap-arcgis-pro.zip
 npm run serve           # static server on :8000
@@ -313,6 +330,8 @@ rebuild procedure.
 ## Licence
 
 MIT for the code (see `LICENSE`). The example data keeps the licence of its
-source: Natural Earth is public domain, DIVA-GIS boundaries are free for
+source: Natural Earth is public domain (the embedded country outlines come from
+it), geoBoundaries is CC BY 4.0 (the regions and districts the page downloads
+carry their own credit on the map), DIVA-GIS boundaries are free for
 non-commercial use, and the displacement figures belong to IOM DTM. Basemaps
 belong to their providers and carry their own attribution, printed on the map.

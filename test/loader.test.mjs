@@ -694,7 +694,7 @@ test('the loader dialog offers every column and every text, then builds the page
   p.T.loader().mapping.valueIn = 'distributed';
   p.T.loader().options.inLabel = 'Moustiquaires distribuées';
   p.T.loader().options.outLabel = 'Ménages ciblés';
-  p.T.buildFromLoader();
+  await p.T.buildFromLoader();
   const D = p.T.D();
   assert.equal(D.nodes.length, 3);
   assert.equal(D.edges.length, 2);
@@ -860,4 +860,106 @@ test('the dialog shows where the points will land, and warns about a collapsed t
   );
   assert.equal(p.els.geoWarn.hidden, false);
   assert.match(p.els.geoWarn.innerHTML, /same point/);
+});
+
+test('a polygon layer for the values asks which column to use, and can be named', async () => {
+  const p = loadPage();
+  const csv = 'district,people,households,note\nAlpha,30,9,x\nBeta,12,4,y\n';
+  await p.log.listeners.fileTheme.change({ target: { files: [new p.File('areas.csv', csv)] } });
+
+  const th = p.T.loader().theme;
+  assert.ok(th, 'the layer was read');
+  assert.equal(th.field, 'people', 'the first numeric column is guessed');
+  const html = p.els.themeList.innerHTML;
+  assert.match(html, /Value column/, 'the choice is shown, not hidden');
+  assert.match(html, /id="thField"/);
+  assert.match(html, /<option value="people" selected/);
+  assert.match(html, /<option value="households"/);
+  assert.doesNotMatch(html, /<option value="note"/, 'text columns are not offered');
+  assert.match(html, /id="thLabel"/, 'the legend title can be typed');
+  assert.match(html, /id="thHint"/, 'and the sample figures are shown');
+  assert.match(p.els.fileThemeInfo.textContent, /value column "people"/);
+
+  // choosing another column rereads the rows and follows with the legend title
+  p.log.listeners['themeList #thField'].change({ target: { value: 'households' } });
+  const changed = p.T.loader().theme;
+  assert.equal(changed.field, 'households');
+  assert.equal(changed.label, 'households', 'the title follows unless it was renamed');
+  assert.deepEqual(
+    Array.from(changed.rows, r => [r.name, Number(r.value)]),
+    [
+      ['Alpha', 9],
+      ['Beta', 4],
+    ],
+  );
+  assert.match(p.els.fileThemeInfo.textContent, /value column "households"/);
+
+  // a typed title is kept when the column changes again
+  p.log.listeners['themeList #thLabel'].input({ target: { value: 'Households' } });
+  assert.equal(p.T.loader().theme.label, 'Households');
+  p.log.listeners['themeList #thField'].change({ target: { value: 'people' } });
+  assert.equal(p.T.loader().theme.label, 'Households', 'the author’s title survives');
+  assert.equal(p.T.loader().theme.rows.length, 2);
+});
+
+test('the value column can be chosen for a polygon shapefile too', async () => {
+  const p = loadPage();
+  const bundle = p.T.buildShapefile({
+    shape: 'polygon',
+    records: [
+      {
+        properties: { name: 'Alpha', people: 30, households: 9 },
+        geometry: [
+          [
+            [0, 0],
+            [0, 1],
+            [1, 1],
+            [1, 0],
+            [0, 0],
+          ],
+        ],
+      },
+      {
+        properties: { name: 'Beta', people: 12, households: 4 },
+        geometry: [
+          [
+            [1, 0],
+            [1, 1],
+            [2, 1],
+            [2, 0],
+            [1, 0],
+          ],
+        ],
+      },
+    ],
+    fields: [
+      { name: 'name', type: 'C', width: 20 },
+      { name: 'people', type: 'N', width: 10 },
+      { name: 'households', type: 'N', width: 10 },
+    ],
+  });
+  await p.T.takeThemeFiles([
+    new p.File(
+      'areas.zip',
+      p.T.zipFiles([
+        { name: 'areas.shp', data: bundle.shp },
+        { name: 'areas.dbf', data: bundle.dbf },
+      ]),
+    ),
+  ]);
+  const th = p.T.loader().theme;
+  assert.ok(th, 'the polygons carry the values');
+  assert.equal(th.field, 'PEOPLE');
+  assert.match(p.els.themeList.innerHTML, /Value column/);
+  assert.match(
+    p.els.themeList.innerHTML,
+    /<option value="HOUSEHOLDS"/,
+    'the other column is offered',
+  );
+  p.log.listeners['themeList #thField'].change({ target: { value: 'HOUSEHOLDS' } });
+  assert.equal(p.T.loader().theme.field, 'HOUSEHOLDS');
+  assert.deepEqual(
+    Array.from(p.T.loader().theme.rows, r => Number(r.value)),
+    [9, 4],
+  );
 });
