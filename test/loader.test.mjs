@@ -669,3 +669,38 @@ test('two boundary layers give every place its group, as the toolbox does', () =
   p.T.rebuild();
   assert.match(p.els.listGroups.innerHTML, /North|South/, 'arrivals are counted by group');
 });
+
+test('the loader dialog offers every column and every text, then builds the page', async () => {
+  const p = loadPage();
+  const csv = [
+    'origin_name,origin_lon,origin_lat,destination_name,destination_lon,destination_lat,date,targeted,distributed',
+    'Bamako,-7.99,12.65,Ségou,-6.26,13.43,2026-01-04,120,60',
+    'Ségou,-6.26,13.43,Mopti,-4.19,14.49,2026-01-11,85,80',
+  ].join('\n');
+  await p.T.takeTable(new p.File('flows.csv', csv));
+
+  // the columns are offered as drop-downs, including the arrival value
+  const fields = p.els.fields.innerHTML;
+  assert.match(fields, /id="f_value"/);
+  assert.match(fields, /id="f_valueIn"/);
+  assert.match(fields, /Arrival value \(optional\)/);
+  // and the texts the toolbox calls "Text on the page"
+  const opts = p.els.opts.innerHTML;
+  for (const id of ['oTitle', 'oSubtitle', 'oUnit', 'oOutLabel', 'oInLabel', 'oSource'])
+    assert.match(opts, new RegExp('id="' + id + '"'), id + ' is offered');
+  assert.match(p.els.preview.innerHTML, /rows/, 'the first rows are previewed');
+
+  // fill the two names and the arrival column, then build
+  p.T.loader().mapping.valueIn = 'distributed';
+  p.T.loader().options.inLabel = 'Moustiquaires distribuées';
+  p.T.loader().options.outLabel = 'Ménages ciblés';
+  p.els.oInLabel.value = 'Moustiquaires distribuées';
+  p.T.buildFromLoader();
+  const D = p.T.D();
+  assert.equal(D.nodes.length, 3);
+  assert.equal(D.edges.length, 2);
+  assert.equal(D.edges[0].length, 5, 'the arrival value is kept');
+  assert.equal(D.meta.inLabel, 'Moustiquaires distribuées');
+  assert.match(p.els.lgIn.textContent, /Moustiquaires distribuées/);
+  assert.equal(p.els.dlg.hidden, true, 'the dialog closes');
+});
