@@ -9113,15 +9113,26 @@ function guessThemeField(profile) {
   );
 }
 
+/**
+ * A cell as a number. An empty cell means "no value", not zero: a district with
+ * no figure in the chosen column must not be painted as an area at 0.
+ */
+function themeNumber(raw) {
+  if (raw === null || raw === undefined) return NaN;
+  const text = String(raw).replace(/[\s,]/g, '');
+  if (!text) return NaN;
+  return Number(text);
+}
+
 /** The rows for one chosen column: {name, value, rings?} per area. */
 function themeRowsFor(profile, field) {
   if (!field) return [];
   if (profile.kind === 'geojson')
     return profile.shapes
-      .map(s => ({ name: s.name, rings: s.rings, value: Number(s.props[field]) }))
+      .map(s => ({ name: s.name, rings: s.rings, value: themeNumber(s.props[field]) }))
       .filter(r => Number.isFinite(r.value));
   return profile.rows
-    .map(r => ({ name: r.name, value: Number(String(r.row[field] ?? '').replace(/[\s,]/g, '')) }))
+    .map(r => ({ name: r.name, value: themeNumber(r.row[field]) }))
     .filter(r => Number.isFinite(r.value));
 }
 
@@ -9129,10 +9140,8 @@ function themeRowsFor(profile, field) {
 function themeFieldSample(profile, field) {
   const values =
     profile.kind === 'geojson'
-      ? profile.shapes.map(s => Number(s.props[field])).filter(Number.isFinite)
-      : profile.rows
-          .map(r => Number(String(r.row[field] ?? '').replace(/[\s,]/g, '')))
-          .filter(Number.isFinite);
+      ? profile.shapes.map(s => themeNumber(s.props[field])).filter(Number.isFinite)
+      : profile.rows.map(r => themeNumber(r.row[field])).filter(Number.isFinite);
   if (!values.length) return '';
   const sorted = values.slice().sort((a, b) => a - b);
   return (
