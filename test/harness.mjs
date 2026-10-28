@@ -316,11 +316,11 @@ export function loadPage({
   class FileStub {
     constructor(name, text) {
       this.name = name;
-      this.text = text;
+      this._text = text; // never `text`: that name is the reader method
       this.size = text.length;
     }
     text() {
-      return Promise.resolve(this.text);
+      return Promise.resolve(this._text);
     }
   }
 
