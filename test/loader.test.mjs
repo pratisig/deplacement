@@ -864,7 +864,7 @@ test('the dialog shows where the points will land, and warns about a collapsed t
 
 test('a polygon layer for the values asks which column to use, and can be named', async () => {
   const p = loadPage();
-  const csv = 'district,people,households,note\nAlpha,30,9,x\nBeta,12,4,y\n';
+  const csv = 'district,people,households,note\nAlpha,1240,9,x\nBeta,48900,4,y\nGamma,,7,z\n';
   await p.log.listeners.fileTheme.change({ target: { files: [new p.File('areas.csv', csv)] } });
 
   const th = p.T.loader().theme;
@@ -879,6 +879,8 @@ test('a polygon layer for the values asks which column to use, and can be named'
   assert.match(html, /id="thLabel"/, 'the legend title can be typed');
   assert.match(html, /id="thHint"/, 'and the sample figures are shown');
   assert.match(p.els.fileThemeInfo.textContent, /value column "people"/);
+  assert.match(p.els.themeList.innerHTML, /from 1,240 to 48,900/);
+  assert.equal(th.rows.length, 2, 'a blank cell is no value, not a zero');
 
   // choosing another column rereads the rows and follows with the legend title
   p.log.listeners['themeList #thField'].change({ target: { value: 'households' } });
@@ -890,6 +892,7 @@ test('a polygon layer for the values asks which column to use, and can be named'
     [
       ['Alpha', 9],
       ['Beta', 4],
+      ['Gamma', 7],
     ],
   );
   assert.match(p.els.fileThemeInfo.textContent, /value column "households"/);
@@ -899,7 +902,7 @@ test('a polygon layer for the values asks which column to use, and can be named'
   assert.equal(p.T.loader().theme.label, 'Households');
   p.log.listeners['themeList #thField'].change({ target: { value: 'people' } });
   assert.equal(p.T.loader().theme.label, 'Households', 'the author’s title survives');
-  assert.equal(p.T.loader().theme.rows.length, 2);
+  assert.equal(p.T.loader().theme.rows.length, 2, 'Alpha and Beta carry a figure');
 });
 
 test('the value column can be chosen for a polygon shapefile too', async () => {
