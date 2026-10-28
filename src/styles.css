@@ -503,6 +503,37 @@ th {
   background: rgba(217, 89, 38, 0.14);
   border: 1px solid rgba(217, 89, 38, 0.45);
 }
+.themechoice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.themechoice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.themechoice select,
+.themechoice input {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 6px;
+  min-height: 30px;
+}
+.themechoice input {
+  min-width: 180px;
+}
+.thhint {
+  font: 0.72rem var(--mono);
+  color: var(--muted);
+}
 .geosum {
   margin: 10px 0 0;
   font: 0.75rem var(--mono);

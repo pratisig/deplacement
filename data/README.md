@@ -10,6 +10,7 @@ user loads (`src/js/sources.js`), so nothing here is special-cased.
 | `boundaries-adm1.json` | 21 governorate outlines (`p` = rings, `c` = label point) | Natural Earth 1:10m admin-1 states and provinces | public domain |
 | `boundaries-adm2.json` | district outlines, keyed by the district name used in the dataset | DIVA-GIS Yemen districts, via the [topography](https://github.com/tanaynistala/topography) TopoJSON mirror | DIVA-GIS: free for non-commercial use |
 | `example.meta.json` | title, unit, labels and first date of the example | — | — |
+| `countries.json` | 242 country outlines and bounding boxes, used to find the country of a set of coordinates and to draw a national outline when geoBoundaries cannot be reached | Natural Earth 1:50m admin-0 countries | public domain |
 
 Format notes:
 
@@ -30,3 +31,16 @@ Rebuild both boundary files from source with:
 npm run boundaries            # downloads to .cache/, then writes data/boundaries-*.json
 npm run boundaries -- --offline
 ```
+
+`countries.json` is rebuilt the same way, from Natural Earth 1:50m:
+
+```sh
+npm run countries             # downloads to .cache/, then writes data/countries.json
+npm run countries -- --offline
+```
+
+It is simplified to 1 decimal (~11 km, enough to tell one country from its
+neighbour) and held as flat rings plus a bounding box, so the page can place a
+point offline: `countries.js` tests the rings first, then the nearest ring
+within 0.8°, then the smallest box. Countries whose islands vanished at that
+tolerance keep their bounding box alone.

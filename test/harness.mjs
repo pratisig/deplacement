@@ -184,6 +184,7 @@ export function loadPage({
   html: givenHtml,
   search = '',
   storage = {},
+  fetch: fetchImpl,
 } = {}) {
   const html = givenHtml ?? readFileSync(join(root, 'index.html'), 'utf8');
   // Run every script in document order, the way a browser would: a page that
@@ -407,6 +408,10 @@ export function loadPage({
     },
     TextEncoder,
     TextDecoder,
+    // offline by default, like the sandbox: a test that wants a download
+    // passes its own fetch. A page must never depend on the network to open.
+    fetch:
+      fetchImpl || (() => Promise.reject(new Error('the network is not available in this test'))),
     requestAnimationFrame: fn => {
       log.raf++;
       return log.raf;
@@ -469,6 +474,9 @@ export function loadPage({
   curProv, providerFailed, tileFor, setStyle, setBlend, setLimit, limitLayers,
   updateStatus, viewPositions, snapshot, flatToRing,
   // shapefiles in
+  countryAt, countryName, countriesOfPoints, parseCountryCodes, fetchCountryBoundaries,
+  countryOutlineLayer, clipFeatures, extentOfPoints, pointsOfTable, boundariesForBuild,
+  themeProfileFromText, themeRowsFor, themeFieldSample, guessThemeField,
   shapefileToGeoJSON, readShp, readDbf, unzipArchive, inflateRaw, layersFromFiles,
   takeTableFiles, takeBoundaryFiles, takeThemeFiles, takeShapefile, layerFor,
   layerLooksProjected, baseNameOf, headerKey, headerWords, coordAxisOf, coordSideOf,
