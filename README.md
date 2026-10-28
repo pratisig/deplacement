@@ -3,9 +3,10 @@
 **Any origin→destination table, on a map, in one HTML file.**
 
 Drop in a CSV of movements — displaced households, trips, trade, migration — and
-you get an interactive map: places at their real coordinates, flows between them,
-a timeline, administrative limits, and exports for whatever comes next (animated
-GIF, video, GeoJSON, GeoParquet, shapefiles, CSV).
+you get the same page the ArcGIS Pro toolbox writes: a dashboard with the map in
+the middle, filters, period and legend on the left, four analysis panels on the
+right, and exports for whatever comes next (animated GIF, video, printable PDF,
+GeoJSON, GeoParquet, shapefiles, CSV, and a page you can hand over or embed).
 
 The built-in example is Yemeni displacement: 227 districts, 2 832 routes, IOM DTM
 Rapid Displacement Tracking, 4 January – 11 October 2026.
@@ -22,60 +23,81 @@ the file is read in the browser and stays there.
 
 The table is one row per flow:
 
-| origin_name | origin_lon | origin_lat | destination_name | destination_lon | destination_lat | date | value |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Bamako | -7.99 | 12.65 | Ségou | -6.26 | 13.43 | 2026-01-04 | 120 |
-| Ségou | -6.26 | 13.43 | Mopti | -4.19 | 14.49 | 2026-01-11 | 85 |
+| origin_name | origin_lon | origin_lat | destination_name | destination_lon | destination_lat | date       | value |
+| ----------- | ---------- | ---------- | ---------------- | --------------- | --------------- | ---------- | ----- |
+| Bamako      | -7.99      | 12.65      | Ségou            | -6.26           | 13.43           | 2026-01-04 | 120   |
+| Ségou       | -6.26      | 13.43      | Mopti            | -4.19           | 14.49           | 2026-01-11 | 85    |
 
-* **CSV, TSV, semicolon- or pipe-separated, a JSON array of rows, or a GeoJSON
+A flow can carry **two numbers** — what left and what arrived (the toolbox calls
+them the departure and arrival values). Pick the second column in **Arrival
+value (optional)**: the line weight follows the departure value, while arrivals,
+destinations, arrival groups and the net balance follow the arrival one. Leave
+it empty and every figure uses the single value, as before.
+
+- **CSV, TSV, semicolon- or pipe-separated, a JSON array of rows, or a GeoJSON
   FeatureCollection.** The delimiter and the encoding are detected.
-* **Columns are detected from the header row** — origin/destination, coordinates,
-  a date or a day number, and a value — and you can correct every guess in the
-  dialog before building the map. Headers in English, French or Spanish are
+- **Columns are detected from the header row** of a CSV you load in the page —
+  origin/destination, coordinates, a date or a day number, and a value — and you
+  can correct every choice in the dialog before building the map. Headers in English, French or Spanish are
   recognised (`origine`, `ménages`, `destino`, `fecha`, …).
-* **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
+- **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
   up to two levels). Places are then matched to areas by name — accents, casing
   and spelling wobbles tolerated — and the areas become the limits layer.
-* **A row can be its own origin and destination** (a self-loop): that counts as
+- **A row can be its own origin and destination** (a self-loop): that counts as
   movement inside the place, which is how the example treats internal
   displacement.
-* Rows that cannot be placed are **reported, not silently dropped**.
-* Press **Template CSV** for a file you can fill in.
+- Rows that cannot be placed are **reported, not silently dropped**.
+- **Text on the page**: title, subtitle, unit, what one dot and a group are
+  called, the two quantity names (_Households targeted_ / _Products
+  distributed_) and the source note. They reach the legend, the tooltips, the
+  panels and the PDF.
+- **Values by area** (optional): a polygon layer carrying a number, or a plain
+  table of area names and values. Areas are matched to the boundary names (or
+  keep their own outlines) and drawn under the flows, with their own summary
+  card: total, areas with a value, the maximum, the top areas and their share,
+  and the split by group.
+- Press **Template CSV** for a file you can fill in.
 
 Everything downstream follows the file: the title, the unit in the stats line,
-the labels in the legend, the table headings and the time axis.
+the labels in the legend, the table headings and the time axis. With two
+boundary layers the larger one also names each place's group, so the group
+filter, the arrival groups and the summary work without a group column.
 
 ## The view
 
-One canvas, one layout slider:
+A dashboard, not a canvas with a toolbar bolted on:
 
-* **Geo** — places at their true coordinates, over a background map, with the
-  administrative limits you loaded.
-* **Network** — a force layout where places that exchange many flows sit close
-  together. Useful for seeing structure, but distance stops meaning geography, so
-  the basemap fades out and a note says so.
-* **In between** — the slider blends the two, so places slide from one position
-  to the other. There is no mode switch to hunt for.
-
-Also in the bar: **Play** and the timeline (running totals up to the chosen date),
-the basemap switch, the limits switch, **Load data…** and **Export**.
+- **Header** — title, subtitle, the running indicators, **Flows**, **Notes**,
+  **FR/EN**, the light/dark switch, **Export ▾** and **Load data…**.
+- **Left** — group and place filters, the period (Play, ‹ ›, cumulative switch,
+  the bars, from/up to sliders, All/First/Last), how many routes to show, and the
+  legend.
+- **Middle** — the map, with one layout slider: **Geo** (true coordinates over a
+  background map, with the limits), **Network** (a force layout where places that
+  exchange a lot sit together, the basemap fades out and a note says so), and
+  everything in between. Zoom with the wheel, drag to pan, **Fit data** to come
+  back to the extent of the places.
+- **Right** — routes, destinations, arrival groups and net balance, all following
+  the period and the filters.
+- **Under the map** — the analysis strip and the table of the busiest places.
 
 Hover any dot for its arrivals, departures, internal moves and net figure; its
-routes stay lit while the rest fade. The table view below lists the busiest
-places for the selected date.
+routes stay lit while the rest fade.
 
 ## Exports
 
-| Export | What you get |
-| --- | --- |
-| **Animation (GIF)** | The whole period as an animated GIF, encoded in the browser. |
-| **Animation (video)** | The timeline recorded as a WebM video (MediaRecorder). |
-| **Data (JSON)** | The current day: places, flows and totals. |
-| **Data (CSV)** | Two tables — places and flows — for the current day. |
-| **Map (GeoJSON)** | Points, flow lines and area outlines. |
-| **Map (GeoParquet)** | One table with WKB geometry and GeoParquet 1.1 metadata. |
-| **Map (Shapefile)** | A ZIP of `places.shp`, `flows.shp`, `areas.shp` with `.shx`, `.dbf` and `.prj`. |
-| **Page (self-contained)** | This whole app with your data baked in — one HTML file, works offline, ready to hand over or publish. |
+| Export                         | What you get                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Map (PDF, A4)**              | A printable map — title, period, north arrow, scale, legend and source — portrait or landscape chosen from the shape of the data.                                              |
+| **Animation (GIF)**            | The whole period as an animated GIF, encoded in the browser.                                                                                                                   |
+| **Animation (video)**          | The timeline recorded as a WebM video (MediaRecorder).                                                                                                                         |
+| **Data (JSON)**                | The current day: places, flows and totals.                                                                                                                                     |
+| **Data (CSV)**                 | Two tables — places and flows — for the current day.                                                                                                                           |
+| **Map (GeoJSON)**              | Points, flow lines and area outlines.                                                                                                                                          |
+| **Map (GeoParquet)**           | One table with WKB geometry and GeoParquet 1.1 metadata.                                                                                                                       |
+| **Map (Shapefile)**            | A ZIP of `places.shp`, `flows.shp`, `areas.shp` with `.shx`, `.dbf` and `.prj`.                                                                                                |
+| **Page (self-contained)**      | This whole app with your data baked in — one HTML file, works offline, ready to hand over or publish.                                                                          |
+| **Embed (Experience Builder)** | The link, the `<iframe>` code, or the whole page as one file, for the _Embed_ widget of ArcGIS Experience Builder (`embed=1`, `panels=0`, `header=0`, `lang=fr`, `mode=dark`). |
 
 The GIS formats are written from scratch in `src/js/`: a Parquet writer with the
 Thrift compact protocol and hand-rolled WKB, a shapefile/ZIP writer, and a GIF
@@ -86,8 +108,29 @@ the round trip is covered by a test that exports a page and opens it cold.
 
 Two notes: cross-origin map tiles make the canvas unreadable, so the GIF falls
 back to a basemap-free export (the page tells you when it does), and dBase field
-names are ASCII, so accented names are transliterated *in the shapefile only* —
+names are ASCII, so accented names are transliterated _in the shapefile only_ —
 GeoJSON and GeoParquet keep the original spelling.
+
+## What 7.7 brings
+
+The page is the one the toolbox 7.7 writes, and it works on its own:
+
+- **Departure and arrival quantities.** A flow can carry two numbers: the line
+  weight follows the departure value, while arrivals, destinations, arrival
+  groups and the net balance follow the arrival value. Name both in the page —
+  _Households targeted_ / _Products distributed_ — and the legend, the tooltips
+  and the PDF all use those words.
+- **Arrival groups.** Arrivals counted by the group of the _destination_, not of
+  where people came from.
+- **Values by area.** A polygon layer — or a table of area names and values —
+  drawn under the flows, with its own summary card and map key.
+- **Colour of the flows and the moving dots.** Six palettes plus a colour
+  picker, remembered between visits and settable in the address (`?flows=teal`).
+- **English / Français** on the page, buttons and PDF included.
+- **Notes and sources** in a dialog, with a sentence summarising the data.
+- **Cumulative or per-period** reading: unticked, the map and every chart show
+  only the period on screen.
+- **A light and a dark look**, each with its own keyless tile chain.
 
 ## Basemaps: keyless by design
 
@@ -95,21 +138,21 @@ CARTO basemaps answer `403 Required API key`, and the standard OpenStreetMap til
 servers refuse requests that do not come from their own site — which is where the
 original `403` came from. Both are gone:
 
-| Style | First choice | Then |
-| --- | --- | --- |
-| Dark | Esri *World Dark Gray Canvas* | Wikimedia Maps → OSM France → OSM |
-| Light | Esri *World Light Gray Canvas* | Wikimedia Maps → OSM France → OSM |
-| Terrain | OpenTopoMap | Wikimedia Maps → OSM France → OSM |
-| Satellite | Esri *World Imagery* (dimmed) | CyclOSM → OSM France → OSM |
-| None | — (your data and limits only) | — |
+| Style     | First choice                   | Then                              |
+| --------- | ------------------------------ | --------------------------------- |
+| Dark      | Esri _World Dark Gray Canvas_  | Wikimedia Maps → OSM France → OSM |
+| Light     | Esri _World Light Gray Canvas_ | Wikimedia Maps → OSM France → OSM |
+| Terrain   | OpenTopoMap                    | Wikimedia Maps → OSM France → OSM |
+| Satellite | Esri _World Imagery_ (dimmed)  | CyclOSM → OSM France → OSM        |
+| None      | — (your data and limits only)  | —                                 |
 
-* **Nothing needs a key, a token or a sign-up.**
-* If a server refuses the tiles, the map **moves to the next provider by itself**
+- **Nothing needs a key, a token or a sign-up.**
+- If a server refuses the tiles, the map **moves to the next provider by itself**
   and says so under the controls. A single missing tile is not a dead server; it
   takes a sustained run of failures, and picking a style again retries from the top.
-* Light providers used under the Dark style are filtered through CSS
+- Light providers used under the Dark style are filtered through CSS
   `invert/hue-rotate`, so a fallback still matches the dark theme.
-* Commercial providers were avoided deliberately, and the OSM project servers
+- Commercial providers were avoided deliberately, and the OSM project servers
   stay last in every chain because their
   [tile usage policy](https://operations.osmfoundation.org/policies/tiles/) is
   the strictest. For a permanent deployment, point the `PROV` table in
@@ -119,8 +162,8 @@ original `403` came from. Both are gone:
 
 Both layers are embedded in the page, so they never depend on a tile API:
 
-* **Governorates** — Natural Earth 1:10m admin-1 (public domain).
-* **Districts** — DIVA-GIS district layer, recovered from a TopoJSON file whose
+- **Governorates** — Natural Earth 1:10m admin-1 (public domain).
+- **Districts** — DIVA-GIS district layer, recovered from a TopoJSON file whose
   declared transform does not match its own coordinates (see `data/README.md`).
 
 Boundary files you load yourself are simplified on the fly, and the label point
@@ -137,15 +180,24 @@ the timeline, the exports, all of it.
 
 ```
 Insert > Toolbox > Add Toolbox…   pick FlowMap.pyt
-Flow map > Build a flow map page  choose your layers
+Flow map > Build a flow map page (6.9)   choose your layers
 ```
+
+Every column parameter below the table is a drop-down of that table's own
+columns, filled when the tool opens as well as when the table changes, and no
+field is ever filled in for you: the lists are offered, you pick.
+
+The version is in the tool's own title on purpose: it is the one place where a
+screenshot of the pane says which build is installed. A toolbox left beside an
+older `flowmap_core.py` refuses to run instead of quietly building the old page,
+and every page ends its source line with `Built with FlowMap 6.9`.
 
 Everything that decides what the page shows lives in `arcgis/flowmap_core.py`,
 which imports nothing but the standard library, so it runs (and is tested)
 without ArcGIS:
 
 ```sh
-python3 arcgis/flowmap_core.py selftest                          # 29 checks
+python3 arcgis/flowmap_core.py selftest                          # 59 checks
 python3 arcgis/flowmap_core.py demo --out demo.html               # a page from an invented table
 python3 arcgis/flowmap_core.py build --input spec.json --out page.html
 node tools/package-arcgis.mjs                                     # dist/ + a zip for Pro
@@ -163,7 +215,7 @@ recipe for a .NET dockpane add-in, and what the tests do and do not cover.
 ```
 index.html               the built app — the only file a visitor needs
 src/template.html        page shell: markup, controls, loader dialog, notes
-src/styles.css           dark theme
+src/styles.css           the dashboard, light and dark
 src/js/                  the app, in load order (no imports; build.mjs concatenates)
   core.js                DOM handles, theme colours, formatters
   geo.js                 ring areas, centroids, simplification, point-in-polygon
@@ -180,7 +232,13 @@ src/js/                  the app, in load order (no imports; build.mjs concatena
   shp.js                 shapefile + ZIP writer
   parquet.js             GeoParquet writer (Thrift compact, WKB)
   export.js              snapshots, downloads, frame capture
-  ui.js                  controls, events, loader, boot
+  pdf.js                 the printable A4 map (canvas -> JPEG -> PDF)
+  menu.js                the export menu
+  ui.js                  controls, events, timeline, zoom and pan
+  loader.js              the data loader dialog and its mapping form
+  i18n.js                English / French, message by message
+  panels.js              filters, analysis panels, colour, theme layer, notes
+  wiring.js              boots the page and reports a failure on it
 vendor/d3-force.js       the one library the page uses, inlined by build.mjs
                          (generated by tools/vendor-d3.mjs, self-checked)
 data/                    the built-in example (see data/README.md)

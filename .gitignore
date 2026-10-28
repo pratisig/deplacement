@@ -2,3 +2,7 @@ node_modules/
 tools/out/
 *.log
 .cache/
+__pycache__/
+*.pyc
+/arcgis/_Synthese_villages_.json
+dist/

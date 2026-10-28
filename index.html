@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<meta name="flowmap-template" content="7.7">
 <meta charset=utf8>
 <meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Flow map</title>
@@ -9,18 +10,22 @@
 /* Layout: one dark canvas holds the network; controls sit under it, then legend, table view and notes.
    Single dark look by choice: the piece is a night-time map of movement. */
 :root {
-  color-scheme: dark;
-  --bg: #07090c;
-  --panel: #0d1218;
-  --ink: #e6edf3;
-  --muted: #93a4b3;
-  --line: #212d38;
-  --recv: #3987e5;
-  --send: #d95926;
-  --bal: #b4c0cb;
-  --edge: #d9a066;
-  --spark: #ffeccb;
-  --focus: #6da7ec;
+  color-scheme: light;
+  --bg: #f4f1ec;
+  --panel: #ffffff;
+  --ink: #1d2733;
+  --muted: #5d6b79;
+  --line: #dde2e8;
+  --recv: #14877a;
+  --send: #e07a10;
+  --bal: #7b8794;
+  --edge: #2f4fa3;
+  --spark: #1b2b6b;
+  --focus: #2f4fa3;
+  --bar: #243b8f;
+  --accent: #7a0f1a;
+  --hover: #eef1f5;
+  --track: #e3e7ec;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
   --display: 'IBM Plex Sans Condensed', system-ui, 'Segoe UI', sans-serif;
 }
@@ -113,11 +118,11 @@ button {
   border-left: 1px solid var(--line);
 }
 button[aria-pressed='true'] {
-  background: #1a2430;
+  background: var(--hover);
   box-shadow: inset 0 -2px 0 var(--recv);
 }
 button:hover {
-  background: #17212c;
+  background: var(--hover);
 }
 button:focus-visible,
 input:focus-visible,
@@ -548,83 +553,1053 @@ body.dropping::after {
 .foot a {
   color: inherit;
 }
+
+/* kpis, filters, analysis panels, notes */
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.kpis div {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 14px;
+  min-width: 120px;
+}
+.kpis b {
+  display: block;
+  font: 600 1.2rem var(--display);
+  color: var(--ink);
+  line-height: 1.25;
+}
+.kpis span {
+  font: 0.7rem var(--mono);
+  color: var(--muted);
+}
+.flt {
+  margin-top: 8px;
+}
+.flt select {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  min-height: 36px;
+  max-width: 260px;
+}
+.flt label {
+  color: var(--muted);
+}
+.insight {
+  border-left: 3px solid var(--send);
+  background: var(--panel);
+  padding: 8px 12px;
+  margin: 12px 0 0;
+  font-size: 0.86rem;
+  border-radius: 0 4px 4px 0;
+}
+.themekey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.themekey .tk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.themekey .tk i {
+  width: 14px;
+  height: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  display: inline-block;
+}
+.agrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.agrid .pane {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.agrid h2 {
+  margin: 0 0 8px;
+  font: 600 0.68rem var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.blist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  font-size: 0.78rem;
+}
+.blist li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(40px, 0.8fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.blist li.muted {
+  display: block;
+  color: var(--muted);
+}
+.blist li.click {
+  cursor: pointer;
+}
+.blist li.click:hover {
+  background: #17212c;
+}
+.blist .lb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blist .tr {
+  height: 6px;
+  background: #1a2430;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.blist .tr i {
+  display: block;
+  height: 100%;
+  background: var(--recv);
+}
+.blist .tr i.neg {
+  background: var(--send);
+}
+.blist b {
+  font: 500 0.74rem var(--mono);
+}
+.blist small {
+  color: var(--muted);
+}
+.blist small.red {
+  color: #ef8466;
+}
+dialog.notes {
+  max-width: min(680px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+dialog.notes::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.notes-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.notes-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+dialog.notes p {
+  font-size: 0.85rem;
+}
+
+/* ---- dashboard layout (3 columns) and the light / dark looks ---- */
+body.dark {
+  color-scheme: dark;
+  --bg: #07090c;
+  --panel: #0d1218;
+  --ink: #e6edf3;
+  --muted: #93a4b3;
+  --line: #212d38;
+  --recv: #3fae9f;
+  --send: #e58a35;
+  --bal: #b4c0cb;
+  --edge: #d9a066;
+  --spark: #ffeccb;
+  --focus: #6da7ec;
+  --bar: #4f7fd6;
+  --hover: #17212c;
+  --track: #1a2430;
+}
+body {
+  background: var(--bg);
+}
+.app {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 340px;
+  grid-template-areas: 'top top top' 'left mid right';
+  gap: 14px;
+  align-items: start;
+  padding: 0 0 24px;
+}
+.top {
+  grid-area: top;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 20px;
+  min-height: 70px;
+}
+.top .ttl {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.top h1 {
+  color: #fff;
+  font-size: 1.35rem;
+  margin: 0;
+  line-height: 1.2;
+}
+.top .sub {
+  color: rgba(255, 255, 255, 0.78);
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  max-width: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.top .kpis {
+  margin: 0;
+  flex: 0 1 auto;
+  justify-content: center;
+}
+.top .kpis div {
+  background: rgba(255, 255, 255, 0.14);
+  border: 0;
+  color: #fff;
+  text-align: center;
+  min-width: 96px;
+}
+.top .kpis b {
+  color: #fff;
+  font-size: 1.15rem;
+}
+.top .kpis span {
+  color: rgba(255, 255, 255, 0.82);
+  font:
+    0.72rem system-ui,
+    sans-serif;
+}
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font:
+    0.85rem system-ui,
+    sans-serif;
+}
+.hbtn {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  padding: 6px 12px;
+  min-height: 34px;
+}
+.hbtn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.chk {
+  background: transparent;
+  color: #fff;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+.chk:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.chk::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid #fff;
+  display: inline-block;
+  box-sizing: border-box;
+}
+.chk[aria-pressed='true']::before {
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4 10.5l4 4 8-9' fill='none' stroke='%237a0f1a' stroke-width='2.6'/%3E%3C/svg%3E")
+    center/16px no-repeat;
+}
+.chk[aria-pressed='true'] {
+  box-shadow: none;
+  background: transparent;
+}
+.top .menu {
+  position: relative;
+}
+.top .menu-pop {
+  right: 0;
+  left: auto;
+}
+.side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  align-content: start;
+}
+.left {
+  grid-area: left;
+  padding-left: 14px;
+}
+.right {
+  grid-area: right;
+  padding-right: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.mid {
+  grid-area: mid;
+  min-width: 0;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.card h2 {
+  margin: 0 0 8px;
+  font:
+    700 0.74rem system-ui,
+    sans-serif;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+body.dark .card h2 {
+  color: var(--muted);
+}
+.card select {
+  width: 100%;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font:
+    0.92rem system-ui,
+    sans-serif;
+  min-height: 38px;
+  margin: 2px 0 10px;
+  max-width: none;
+}
+.card .fl {
+  display: block;
+  font:
+    0.85rem system-ui,
+    sans-serif;
+  color: var(--ink);
+}
+.card .act {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.card .act:hover {
+  background: var(--hover);
+}
+.pbar {
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.pbar button {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.pbar button:hover {
+  background: var(--hover);
+}
+.months {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 62px;
+  margin-bottom: 4px;
+}
+.months button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  height: 100%;
+  position: relative;
+}
+.months button i {
+  display: block;
+  background: var(--track);
+  border-radius: 2px 2px 0 0;
+  min-height: 3px;
+}
+.months button.on i {
+  background: var(--accent);
+}
+.months button:hover i {
+  filter: brightness(0.9);
+}
+.months button span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -17px;
+  text-align: center;
+  font: 0.68rem var(--mono);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.months {
+  margin-bottom: 22px;
+}
+#cPeriod .sl {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+#cPeriod .sl input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+#cPeriod .sl label {
+  color: var(--muted);
+  font:
+    0.82rem system-ui,
+    sans-serif;
+}
+#topN {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.dt {
+  font: 0.8rem var(--mono);
+  color: var(--ink);
+  margin: 8px 0 2px;
+}
+.ptot {
+  font:
+    0.84rem system-ui,
+    sans-serif;
+  color: var(--muted);
+  margin: 2px 0 8px;
+}
+.phint {
+  font:
+    0.82rem system-ui,
+    sans-serif;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+.row3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.row3 button {
+  padding: 6px 4px;
+}
+.play {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.play:hover {
+  background: var(--hover);
+}
+.card .legend {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+.card .legend li {
+  align-items: center;
+}
+.grad {
+  width: 34px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #c9d2ee, var(--bar));
+  flex: none;
+}
+.themekey {
+  margin-top: 12px;
+  font:
+    0.86rem system-ui,
+    sans-serif;
+  color: var(--ink);
+  display: block;
+}
+.themekey b {
+  display: block;
+  margin-bottom: 6px;
+}
+.tkrow {
+  display: flex;
+  gap: 2px;
+}
+.tkrow .tk {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  font: 0.66rem var(--mono);
+  color: var(--muted);
+  text-align: center;
+}
+.tkrow .tk i {
+  width: auto;
+  height: 11px;
+  border: 0;
+  display: block;
+}
+.stage {
+  border-radius: 8px;
+  background: var(--bg);
+}
+.cum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font:
+    0.82rem system-ui,
+    sans-serif;
+  color: var(--muted);
+  margin: 8px 0 4px;
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.swatches button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+.swatches button[aria-pressed='true'] {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--panel) inset;
+}
+.lyrpop .swatches input[type='color'] {
+  width: 30px !important;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+}
+.tsum {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.tsum div {
+  background: var(--hover);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.tsum b {
+  display: block;
+  font-size: 1.05rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tsum span {
+  font:
+    0.7rem system-ui,
+    sans-serif;
+  color: var(--muted);
+}
+.sub2 {
+  margin-top: 14px;
+}
+#listTheme .tr i {
+  background: #d9503a;
+}
+#listThemeGrp .tr i {
+  background: #a9262a;
+}
+.zoom {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.zoom button {
+  width: 38px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 1.25rem;
+  background: var(--panel);
+  color: var(--ink);
+  border: 0;
+}
+.zoom button + button {
+  border-top: 1px solid var(--line);
+}
+.zoom button:hover {
+  background: var(--hover);
+}
+.stats {
+  left: 62px;
+  top: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 14px;
+  color: var(--ink);
+  font-size: 0.8rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  line-height: 1.55;
+}
+.stats .sh {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.lyrbtn {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 44px;
+  min-height: 44px;
+  font-size: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.lyrpop {
+  position: absolute;
+  right: 10px;
+  top: 60px;
+  z-index: 6;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+  max-width: calc(100% - 20px);
+  font:
+    0.8rem system-ui,
+    sans-serif;
+}
+.lyrpop .seg {
+  flex-wrap: wrap;
+}
+.lyrpop .toggle {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.lyrpop .toggle[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+.lyrpop .lay {
+  display: grid;
+  gap: 4px;
+}
+.lyrbtn:hover {
+  background: var(--hover);
+}
+.lyrbtn[aria-expanded='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+.chk:hover,
+.hbtn:hover {
+  color: #fff;
+}
+.lyrpop .lay input {
+  width: 100%;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+.seg button {
+  background: var(--panel);
+}
+.seg button:hover {
+  background: var(--hover);
+}
+.seg button[aria-pressed='true']:hover {
+  background: var(--accent);
+}
+.insight {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 10px 0 0;
+  font-size: 0.95rem;
+}
+.bm {
+  margin: 8px 0 0;
+}
+.blist .tr {
+  background: var(--track);
+}
+.blist .tr i {
+  background: var(--bar);
+}
+.blist li {
+  font-size: 0.86rem;
+}
+.blist li.click:hover {
+  background: var(--hover);
+}
+#listNet .tr i {
+  background: var(--recv);
+}
+#listNet .tr i.neg {
+  background: var(--send);
+}
+.blist b {
+  font-size: 0.82rem;
+}
+.blist small.red {
+  color: #c0392b;
+}
+.right .pane {
+  min-height: 120px;
+}
+#tv {
+  margin-top: 12px;
+  color: var(--ink);
+}
+.note {
+  color: var(--muted);
+}
+.foot {
+  color: var(--muted);
+}
+
+/* ---- embedded in another page (iframe, ArcGIS Experience Builder) ---- */
+.embed .top {
+  min-height: 48px;
+  padding: 6px 14px;
+}
+.embed .top .sub,
+.embed #bLoad,
+.embed .foot {
+  display: none;
+}
+.embed .app {
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.embed.nohead .top {
+  display: none;
+}
+.embed.nopanels .side {
+  display: none;
+}
+.embed.nopanels .app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'top' 'mid';
+}
+.embed.nopanels .mid {
+  padding: 0 10px;
+}
+dialog.embdlg {
+  max-width: min(760px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+dialog.embdlg::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+dialog.embdlg h3 {
+  margin: 14px 0 4px;
+  font-size: 0.95rem;
+}
+dialog.embdlg p,
+dialog.embdlg li {
+  font-size: 0.85rem;
+  margin: 4px 0;
+}
+dialog.embdlg ul,
+dialog.embdlg ol {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+dialog.embdlg textarea,
+dialog.embdlg input[type='text'] {
+  width: 100%;
+  font: 0.78rem var(--mono);
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+dialog.embdlg textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+dialog.embdlg .erow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 8px 0;
+  font-size: 0.85rem;
+  align-items: center;
+}
+dialog.embdlg .erow select {
+  font: inherit;
+}
+@media (min-width: 1100px) {
+  .mid {
+    padding: 0;
+  }
+}
+@media (max-width: 1099px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'top' 'mid' 'left' 'right';
+  }
+  .left,
+  .right {
+    padding: 0 12px;
+  }
+  .mid {
+    padding: 0 12px;
+  }
+  .top .kpis {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+  .tools {
+    margin-left: 0;
+  }
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="head">
-    <h1 id="title">Flow map</h1>
-    <p class="sub" id="subtitle"></p>
+<div class="app" id="app">
+  <header class="top">
+    <div class="ttl">
+      <h1 id="title">Flow map</h1>
+      <p class="sub" id="subtitle"></p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="tools">
+      <button class="chk" id="bFlows" type="button" aria-pressed="true">Flows</button>
+      <button class="chk" id="bTheme" type="button" aria-pressed="true" hidden></button>
+      <button class="hbtn" id="bNotes" type="button">ⓘ Notes</button>
+      <button class="hbtn" id="bLang" type="button" title="Français / English">FR</button>
+      <button class="hbtn" id="bMode" type="button" title="Light / dark">☾</button>
+      <div class="menu">
+        <button class="hbtn" id="bExport" type="button" aria-expanded="false" aria-haspopup="true">Export ▾</button>
+        <div class="menu-pop" id="exportPop" hidden role="menu"></div>
+      </div>
+      <button class="hbtn" id="bLoad" type="button">Load data…</button>
+    </div>
   </header>
 
-  <div class="stage" id="stage">
-    <canvas id="cv" role="img" aria-label="Map of places linked by flows. A table view with the busiest places is below the chart."></canvas>
-    <div class="stats" id="stats"></div>
-  </div>
+  <aside class="side left" aria-label="Controls">
+    <section class="card" id="flt">
+      <h2 id="lblFilter">Filters</h2>
+      <label class="fl" id="lblGrp" for="selGrp">Group</label>
+      <select id="selGrp" aria-label="Group"></select>
+      <label class="fl" id="lblNode" for="selNode">Place</label>
+      <select id="selNode" aria-label="Place"></select>
+      <button class="act" id="bClr" type="button" hidden>Clear filters</button>
+    </section>
 
-  <div class="ctl">
-    <div class="lay">
-      <label for="bld">Layout</label>
-      <input id="bld" type="range" min="0" max="100" step="1" value="0">
-      <span class="layv" id="layv">Geo</span>
+    <section class="card" id="cPeriod">
+      <h2>Period</h2>
+      <div class="pbar">
+        <button class="act" id="bPrev" type="button" title="Previous period" aria-label="Previous period">‹</button>
+        <button class="play" id="bPlay" type="button">Play</button>
+        <button class="act" id="bNext" type="button" title="Next period" aria-label="Next period">›</button>
+      </div>
+      <label class="cum"><input type="checkbox" id="chkCum" checked> <span id="lblCum">Cumulative</span></label>
+      <div class="months" id="months" role="group" aria-label="Periods"></div>
+      <div class="sl"><label for="slFrom" id="lblFrom">From</label><input id="slFrom" type="range" min="0" max="1" step="1" value="0"></div>
+      <div class="sl"><label for="sl" id="lblUpTo">Up to</label><input id="sl" type="range" min="0" max="1" step="1" value="0"></div>
+      <div class="dt" id="dt"></div>
+      <p class="ptot" id="ptot"></p>
+      <div class="row3">
+        <button class="act" id="bAll" type="button">All</button>
+        <button class="act" id="bFirst" type="button">First</button>
+        <button class="act" id="bLast" type="button">Last</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span id="lblTopN">Routes shown</span> : <span id="topNVal"></span></h2>
+      <input id="topN" type="range" min="5" max="300" step="1" value="300" aria-labelledby="lblTopN">
+      <p class="phint">Strongest routes only; the analysis covers every route.</p>
+    </section>
+
+    <section class="card">
+      <h2>Legend</h2>
+      <ul class="legend">
+        <li><span class="sw" style="background:var(--recv)"></span><span id="lgIn">More in than out</span></li>
+        <li><span class="sw" style="background:var(--send)"></span><span id="lgOut">More out than in</span></li>
+        <li><span class="sw" style="background:var(--bal)"></span>Roughly balanced</li>
+        <li><span class="ring"></span>Ring: movement inside the place itself</li>
+        <li><span class="grad"></span>Route: weak → strong (arrow = direction)</li>
+        <li><span class="ln"></span>Between groups</li>
+        <li><span class="ln d"></span>Within one group</li>
+        <li><span class="bnd"></span>Level 1 limit</li>
+        <li><span class="bnd f"></span>Level 2 limit</li>
+      </ul>
+      <div class="themekey" id="lgTheme" hidden></div>
+    </section>
+  </aside>
+
+  <main class="mid">
+    <div class="stage" id="stage">
+      <canvas id="cv" role="img" aria-label="Map of places linked by flows. A table view with the busiest places is below the chart."></canvas>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button id="bZin" type="button" title="Zoom in">+</button>
+        <button id="bZout" type="button" title="Zoom out">&minus;</button>
+        <button id="bFit" type="button" title="Centre the map on the data">⌖</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <button class="lyrbtn" id="bLayers" type="button" aria-expanded="false" title="Map layers" aria-label="Map layers">◫</button>
+      <div class="lyrpop" id="lyrPop" hidden>
+        <div class="seg" role="group" aria-label="Background map">
+          <button id="bLight" type="button" aria-pressed="true">Light</button>
+          <button id="bDark" type="button" aria-pressed="false">Dark</button>
+          <button id="bTerrain" type="button" aria-pressed="false">Terrain</button>
+          <button id="bSat" type="button" aria-pressed="false">Satellite</button>
+          <button id="bNone" type="button" aria-pressed="false">None</button>
+        </div>
+        <button class="toggle" id="bLim" type="button" aria-pressed="true">Limits</button>
+        <div class="lay">
+          <label id="lblFlowCol">Flow colour</label>
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="lay">
+          <label for="bld">Layout</label>
+          <input id="bld" type="range" min="0" max="100" step="1" value="0">
+          <span class="layv" id="layv">Geo</span>
+        </div>
+      </div>
     </div>
-    <div class="seg" role="group" aria-label="Background map">
-      <button id="bDark" type="button" aria-pressed="true">Dark</button>
-      <button id="bLight" type="button" aria-pressed="false">Light</button>
-      <button id="bTerrain" type="button" aria-pressed="false">Terrain</button>
-      <button id="bSat" type="button" aria-pressed="false">Satellite</button>
-      <button id="bNone" type="button" aria-pressed="false">None</button>
-    </div>
-    <button class="toggle" id="bLim" type="button" aria-pressed="true">Limits</button>
-    <button class="play" id="bPlay" type="button">Play</button>
-    <div class="sl">
-      <label for="sl">Up to</label>
-      <input id="sl" type="range" min="0" max="1" step="1" value="0">
-      <span class="dt" id="dt"></span>
-    </div>
-    <button class="act" id="bLoad" type="button">Load data…</button>
-    <div class="menu">
-      <button class="act" id="bExport" type="button" aria-expanded="false" aria-haspopup="true">Export ▾</button>
-      <div class="menu-pop" id="exportPop" hidden role="menu"></div>
-    </div>
-  </div>
+    <p class="bm" id="bm"></p>
+    <p class="toast" id="toast" hidden></p>
+    <p class="insight" id="insight" hidden></p>
 
-  <p class="bm" id="bm"></p>
-  <p class="toast" id="toast" hidden></p>
+    <details id="tv">
+      <summary>Table view: the busiest places for the chosen date</summary>
+      <div class="tw"><table>
+        <thead id="tbHead"></thead>
+        <tbody id="tb"></tbody>
+      </table></div>
+    </details>
+    <div class="note" id="noteBox"></div>
+    <footer class="foot"><span>Built from a table.</span></footer>
+  </main>
 
-  <ul class="legend">
-    <li><span class="sw" style="background:var(--recv)"></span>More in than out</li>
-    <li><span class="sw" style="background:var(--send)"></span>More out than in</li>
-    <li><span class="sw" style="background:var(--bal)"></span>Roughly balanced</li>
-    <li><span class="ring"></span>Ring: movement inside the place itself</li>
-    <li><span class="ln"></span>Between groups</li>
-    <li><span class="ln d"></span>Within one group</li>
-    <li><span class="bnd"></span>Level 1 limit</li>
-    <li><span class="bnd f"></span>Level 2 limit</li>
-  </ul>
-
-  <details id="tv">
-    <summary>Table view: the busiest places for the chosen date</summary>
-    <div class="tw"><table>
-      <thead id="tbHead"></thead>
-      <tbody id="tb"></tbody>
-    </table></div>
-  </details>
-
-  <div class="note">
-    <p>Dot size shows everything that moved into, out of or within one <span id="lgNode">place</span> — in <b id="lgUnit">records</b>. Line thickness shows the value carried on that route. Hover a dot to see only its routes.</p>
-    <p>The <b>Layout</b> slider moves between true geography and a network layout: in the network, places that exchange many flows sit close together, so distance has no geographic meaning. Background maps fade out as the network takes over.</p>
-    <p>Background maps are public tile servers that need no API key and no sign-up: Esri dark gray, Esri light gray, Esri satellite, OpenTopoMap, Wikimedia Maps, OpenStreetMap France and OpenStreetMap. If a server refuses the tiles, the map switches to the next one by itself. Choose <b>None</b> to draw only your own data and boundaries.</p>
-    <p id="noteSource">Source: IOM DTM Rapid Displacement Tracking, district level. Households are counted from assessments and added up from 4 January to the date chosen, so a family assessed twice counts twice.</p>
-    <p><b>Any table works.</b> Press <b>Load data…</b> and drop a CSV, TSV or JSON file with one row per flow — an origin, a destination and a value, plus either coordinates or names that match a boundary file you also load. Nothing is uploaded: the file is read in the browser and stays there. <b>Export</b> writes the current day out as JSON, CSV, GeoJSON, GeoParquet or zipped shapefiles, and the whole period as an animated GIF or a WebM video.</p>
-  </div>
-
-  <footer class="foot">
-    <span>Built from a table. <a href="https://github.com/pratisig/deplacement">Source</a>.</span>
-  </footer>
+  <aside class="side right" id="agrid" aria-label="Analysis">
+    <section class="card pane" id="cThemeSum" hidden>
+      <h2 id="hThemeSum"></h2>
+      <div class="tsum" id="themeKpis"></div>
+      <ul class="blist" id="listTheme"></ul>
+      <p class="phint" id="themeShare"></p>
+      <h2 class="sub2" id="hThemeGrp"></h2>
+      <ul class="blist" id="listThemeGrp"></ul>
+    </section>
+    <section class="card pane"><h2 id="hRoutes"></h2><ul class="blist" id="listRoutes"></ul></section>
+    <section class="card pane"><h2 id="hDest"></h2><ul class="blist" id="listDest"></ul></section>
+    <section class="card pane"><h2 id="hGroups"></h2><ul class="blist" id="listGroups"></ul></section>
+    <section class="card pane"><h2 id="hNet"></h2><ul class="blist" id="listNet"></ul></section>
+  </aside>
 </div>
 
 <div class="tip" id="tip" role="presentation"></div>
+
+<dialog id="notes" class="notes">
+  <div class="notes-head"><h2 id="notesTitle">Notes and sources</h2><button class="act" id="bNotesClose" type="button">Close ✕</button></div>
+  <div id="notesBody"></div>
+</dialog>
+
+<dialog id="embedDlg" class="embdlg">
+  <div class="notes-head"><h2 id="embTitle"></h2><button class="act" id="embClose" type="button">✕</button></div>
+  <div id="embBody"></div>
+</dialog>
 
 <div class="dlg" id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
   <div class="dlg-card">
@@ -649,6 +1624,13 @@ body.dropping::after {
       <span class="file" id="fileBoundsInfo">GeoJSON areas: gives map outlines and lets places be found by name</span>
     </div>
     <div id="boundsList" class="bounds"></div>
+
+    <div class="drop" id="dropTheme">
+      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson" hidden>
+      <button class="act" id="bPickTheme" type="button">Add values by area… (optional)</button>
+      <span class="file" id="fileThemeInfo">A polygon layer, or a table of area names and values</span>
+    </div>
+    <div id="themeList" class="bounds"></div>
 
     <p class="err" id="err" hidden></p>
 
@@ -2209,12 +3191,13 @@ const C = {
 };
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = n => Math.round(n).toLocaleString('en-US');
+let LANG = 'en'; // 'en' | 'fr' — set from the dataset or the FR/EN button
+const fmt = n => Math.round(n).toLocaleString(LANG === 'fr' ? 'fr-FR' : 'en-US');
 /** Escape text before it goes into innerHTML. */
 const esc = s =>
   String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const dateFmt = d =>
-  d.toLocaleDateString('en-GB', {
+  d.toLocaleDateString(LANG === 'fr' ? 'fr-FR' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -2223,9 +3206,10 @@ const dateFmt = d =>
 
 /** Day index -> label. Falls back to "Day n" when the source has no dates. */
 function fd(day) {
-  const start = D && D.meta ? D.meta.dateStart : null;
-  if (!start) return 'Day ' + day;
-  return dateFmt(new Date(Date.parse(start + 'T00:00:00Z') + day * 86400000));
+  const meta = (D && D.meta) || {};
+  if (!meta.dateStart && meta.dateMode === 'sequence') return t('step', day + 1);
+  if (!meta.dateStart) return t('day', day);
+  return dateFmt(new Date(Date.parse(meta.dateStart + 'T00:00:00Z') + day * 86400000));
 }
 
 const cv = $('#cv'),
@@ -2247,7 +3231,7 @@ let blend = 0,
   playing = false,
   timer = null,
   hover = null;
-let style = 'dark',
+let style = 'light',
   provIdx = 0,
   provMsg = '',
   limitMode = 'districts';
@@ -2764,6 +3748,7 @@ const MAPPING_FIELDS = [
   ['dLat', 'Destination latitude', false],
   ['date', 'Date or day (optional)', false],
   ['value', 'Value', true],
+  ['valueIn', 'Arrival value (optional)', false],
 ];
 
 /* Sources: read files the user drops in, turn a mapped table (+ optional
@@ -2859,6 +3844,95 @@ function parseBoundaryGeoJSON(text, opts = {}) {
   return { features: out, nameProp, count: out.length };
 }
 
+/** flat [x0, y0, x1, y1, …] -> [[x, y], …] (the shape the point-in-ring test takes) */
+function themePoints(flat) {
+  const pts = [];
+  for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
+  return pts;
+}
+
+/**
+ * Values by area: rows of {name, value, group, rings} become the `theme` object
+ * the page draws. A row without its own rings is matched by name against the
+ * boundary layers; its group is the larger area whose outline holds it.
+ * Several rows for one area are summed, as in the toolbox.
+ */
+function themeFromRows({ rows, label, source, boundaries = [] }) {
+  const warnings = [];
+  const levels = boundaries.map(b => (b.parsed || b).features || []);
+  const lookup = new Map();
+  for (const feats of levels)
+    for (const f of feats) if (!lookup.has(keyName(f.name))) lookup.set(keyName(f.name), f);
+  const big = levels[0] || [];
+  const merged = new Map();
+  const missing = new Set();
+  let bad = 0;
+  for (const row of rows || []) {
+    const name = String(row.name ?? '').trim();
+    if (!name) continue;
+    const value = typeof row.value === 'number' ? row.value : num(row.value);
+    if (value === null) {
+      bad++;
+      continue;
+    }
+    let shown = name,
+      rings = row.rings;
+    if (!rings || !rings.length) {
+      let hit = lookup.get(keyName(name));
+      if (!hit) {
+        // tolerate "District (Region)" and other decorations, as place names are
+        const k = keyName(name);
+        if (k.length > 3)
+          for (const [key, f] of lookup)
+            if (key.length > 3 && (key.includes(k) || k.includes(key))) {
+              hit = f;
+              break;
+            }
+      }
+      if (!hit) {
+        missing.add(name);
+        continue;
+      }
+      shown = hit.name;
+      rings = hit.rings;
+    }
+    let entry = merged.get(shown);
+    if (!entry) {
+      entry = { n: shown, g: '', v: 0, p: rings };
+      merged.set(shown, entry);
+    }
+    entry.v += value;
+    const group = String(row.group || '').trim();
+    if (group && !entry.g) entry.g = group;
+  }
+  if (bad)
+    warnings.push(bad + ' row(s) of the area values had no readable number and were skipped.');
+  if (missing.size)
+    warnings.push(
+      missing.size +
+        ' area name(s) of the area values were not found in the boundaries (' +
+        [...missing].slice(0, 6).join(', ') +
+        (missing.size > 6 ? '…' : '') +
+        '): they are not drawn.',
+    );
+  for (const entry of merged.values()) {
+    if (entry.g || !big.length) continue;
+    const first = entry.p[0] && entry.p[0].length ? entry.p[0] : null;
+    if (!first) continue;
+    const centre = ringCentroidLL(themePoints(first));
+    const host = big.find(f => pointInRingsLL(centre[0], centre[1], f.rings.map(themePoints)));
+    if (host) entry.g = host.name;
+  }
+  const areas = [...merged.values()]
+    .map(a => ({ n: a.n, g: a.g, v: Math.round(a.v * 1e6) / 1e6, p: a.p }))
+    .sort((a, b) => b.v - a.v);
+  if (!areas.length) {
+    warnings.push('No area could be drawn from the area values.');
+    return { theme: null, warnings };
+  }
+  return { theme: { label: label || 'Value', source: source || '', areas }, warnings };
+}
+
 /** name -> [lon, lat] lookup built from a parsed boundary file. */
 function boundaryLookup(boundary) {
   const map = new Map();
@@ -2885,7 +3959,7 @@ function num(v) {
  * Turn a mapped table (+ optional boundaries) into the dataset the app draws.
  * Returns {source, warnings}. Throws a user-readable Error when it cannot.
  */
-function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
+function assembleDataset({ table, mapping, boundaries = [], options = {}, theme = null }) {
   const warnings = [];
   const rows = table.rows.filter(r => Object.values(r).some(v => String(v).trim() !== ''));
   if (!rows.length) throw new Error('The table has no data rows.');
@@ -2937,13 +4011,24 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     if (min !== 0) warnings.push('Day numbers were shifted to start at 0.');
     rows.forEach(r => dayOfRow.push(Math.round((num(get(r, mapping.date)) ?? min) - min)));
   } else {
-    rows.forEach(() => dayOfRow.push(0));
+    // no date column: the rows' own order becomes a short axis of steps, so
+    // the slider and Play do something instead of standing still
+    const steps = Math.max(1, Math.ceil(rows.length / 60));
+    rows.forEach((_, i) => dayOfRow.push(Math.floor(i / steps)));
   }
   const maxDay = Math.max(0, ...dayOfRow);
 
   // ---- places --------------------------------------------------------------
   const nodes = [];
   const index = new Map();
+  const split = new Set(); // names that happen to sit at two positions
+  // One name, one dot - unless the table puts that name at two places. A row
+  // naming the same village at both ends but giving two coordinate pairs is a
+  // movement, not a record inside one place; a table of records per village
+  // repeats the name at the same point and must stay one dot. The dot is
+  // therefore identified by name *and* position, so a set of coordinates is
+  // never silently collapsed into a self-loop the page cannot draw.
+  const SAME_PLACE = 1e-4; // about 11 metres
   const placeOf = (name, group, lon, lat, side) => {
     const label =
       name || (lon !== null && lat !== null ? lon.toFixed(3) + ', ' + lat.toFixed(3) : '');
@@ -2958,19 +4043,39 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
       }
     }
     if (x === null || y === null) return null;
-    const key = keyName(label) + '|' + keyName(group);
-    let i = index.get(key);
-    if (i === undefined) {
-      i = nodes.length;
-      index.set(key, i);
-      nodes.push([label, group || '', +x.toFixed(5), +y.toFixed(5)]);
+    const base = keyName(label) + '|' + keyName(group);
+    const rx = +x.toFixed(5),
+      ry = +y.toFixed(5);
+    let i = index.get(base);
+    if (i !== undefined) {
+      const here = nodes[i];
+      if (Math.abs(here[2] - rx) <= SAME_PLACE && Math.abs(here[3] - ry) <= SAME_PLACE) {
+        return { i, key: base, label, side };
+      }
+      const at = base + '|' + rx + ',' + ry;
+      i = index.get(at);
+      if (i === undefined) {
+        split.add(label);
+        i = nodes.length;
+        index.set(at, i);
+        nodes.push([label, group || '', rx, ry]);
+      }
+      return { i, key: at, label, side };
     }
-    return { i, key, label, side };
+    i = nodes.length;
+    index.set(base, i);
+    nodes.push([label, group || '', rx, ry]);
+    return { i, key: base, label, side };
   };
 
   const edges = [];
   let total = 0;
+  let totalIn = 0;
   let skipped = 0;
+  // A flow can carry two numbers: what left and what arrived. The line weight
+  // follows the departure value, the arrivals and the net balance follow the
+  // arrival value. An empty arrival cell means "the same as the departure".
+  const hasIn = has(mapping.valueIn);
   const missing = new Set();
 
   rows.forEach((row, r) => {
@@ -2992,15 +4097,42 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
       missing.add((!from ? oName : dName) || '(unnamed)');
       return;
     }
-    edges.push([dayOfRow[r], from.i, to.i, value]);
+    const rawIn = hasIn ? num(get(row, mapping.valueIn)) : null;
+    const valueIn = rawIn === null ? value : rawIn;
+    edges.push(
+      hasIn ? [dayOfRow[r], from.i, to.i, value, valueIn] : [dayOfRow[r], from.i, to.i, value],
+    );
     total += value;
+    totalIn += valueIn;
   });
+
+  // A place inside a region belongs to it: with two boundary layers, the
+  // larger one names the group, exactly as the toolbox does, so the group
+  // filter, the arrival groups and the summary all have something to work on.
+  if (boundaries.length >= 2) {
+    const coarse = (boundaries[0].parsed || boundaries[0]).features || [];
+    const shapes = coarse.map(f => ({ name: f.name, rings: f.rings.map(themePoints) }));
+    for (const n of nodes) {
+      if (n[1]) continue;
+      const host = shapes.find(f => pointInRingsLL(n[2], n[3], f.rings));
+      if (host) n[1] = host.name;
+    }
+  }
 
   if (!edges.length) {
     const hint = boundaries.length
       ? 'Check that the names in the table match the names in the boundary file.'
       : 'Add longitude/latitude columns, or load a boundary file so places can be found by name.';
     throw new Error('No usable rows: no place could be placed on the map. ' + hint);
+  }
+  if (split.size) {
+    warnings.push(
+      split.size +
+        ' place name(s) appear at more than one position (' +
+        [...split].slice(0, 4).join(', ') +
+        (split.size > 4 ? '…' : '') +
+        '); each position is kept as its own dot so the flows keep both ends.',
+    );
   }
   if (skipped) {
     warnings.push(
@@ -3031,8 +4163,25 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     groupLabel: options.groupLabel || (boundaries[0] ? 'area' : ''),
     source: options.source || 'Loaded from ' + (options.fileName || 'a file'),
     dateStart: dateMode === 'date' ? dateStart : null,
-    dateMode,
+    // "sequence": no date column, the rows' order drives the timeline
+    dateMode: dateMode === 'none' ? 'sequence' : dateMode,
+    // the author's own names for the two quantities, when given
+    inLabel: options.inLabel || undefined,
+    outLabel: options.outLabel || undefined,
+    arrivalValue: hasIn,
   };
+
+  let themeOut;
+  if (theme && theme.rows && theme.rows.length) {
+    const built = themeFromRows({
+      rows: theme.rows,
+      label: theme.label,
+      source: theme.source,
+      boundaries,
+    });
+    warnings.push(...built.warnings);
+    themeOut = built.theme || undefined;
+  }
 
   const source = {
     meta,
@@ -3040,8 +4189,10 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     edges,
     maxDay,
     total,
+    totalIn: hasIn ? totalIn : undefined,
     admin1: boundaries[0] ? toBoundary(boundaries[0].parsed || boundaries[0]) : undefined,
     admin2: boundaries[1] ? toBoundary(boundaries[1].parsed || boundaries[1]) : undefined,
+    theme: themeOut,
   };
   return { source, warnings };
 }
@@ -3099,6 +4250,9 @@ let N = [];
 let E = [];
 let B = { lon0: -180, lon1: 180, lat0: -60, lat1: 60 };
 let LBL = { node: 'place', group: 'group', unit: 'records' };
+let HAS_IN = false,
+  totalIn = 0,
+  CUM = true;
 
 /** {name: {p, c}} — whatever shape the layer arrived in. */
 function normaliseLayer(layer) {
@@ -3167,7 +4321,10 @@ function buildBounds(src, nodes) {
     c = Math.min(c, n.lat);
     d = Math.max(d, n.lat);
   }
-  for (const layer of [src.admin1, src.admin2]) {
+  // The frame is the extent of the DATA (the places), so the map opens on
+  // where the flows really are. Outlines only decide the frame when there is
+  // no place at all.
+  for (const layer of nodes.length ? [] : [src.admin1, src.admin2]) {
     for (const key in layer || {}) {
       for (const flat of layer[key].p) {
         for (let i = 0; i < flat.length; i += 2) {
@@ -3180,8 +4337,11 @@ function buildBounds(src, nodes) {
     }
   }
   if (!Number.isFinite(a)) return { lon0: -180, lon1: 180, lat0: -60, lat1: 60 };
-  const mx = (b - a) * 0.04 + 0.12,
-    my = (d - c) * 0.04 + 0.12;
+  let mx = (b - a) * 0.08 + 0.04,
+    my = (d - c) * 0.08 + 0.04;
+  // never zoom closer than ~0.3 degrees (a few tens of km) around one place
+  mx = Math.max(mx, (0.3 - (b - a)) / 2);
+  my = Math.max(my, (0.3 - (d - c)) / 2);
   return { lon0: a - mx, lon1: b + mx, lat0: c - my, lat1: d + my };
 }
 
@@ -3191,11 +4351,53 @@ function loadSource(src) {
   D = src;
   N = buildNodes(src);
   E = src.edges;
+  HAS_IN = E.some(e => e.length > 4);
   B = buildBounds(src, N);
+  VIEW = null;
+  FILT = { fg: '', fd: -1 };
+  FROM = 0;
+  TOPN = null;
+  hoverTheme = null;
+  TH = prepareTheme(src.theme);
+  THEME_ON = Boolean(TH);
+  const RAW = {
+    node: (src.meta && src.meta.nodeLabel) || '',
+    group: (src.meta && src.meta.groupLabel) || '',
+    unit: (src.meta && src.meta.unit) || '',
+  };
+  // generic English words are shown in French when the page is in French
+  const GEN_FR = {
+    place: 'lieu',
+    places: 'lieux',
+    city: 'ville',
+    cities: 'villes',
+    town: 'ville',
+    village: 'village',
+    region: 'région',
+    regions: 'régions',
+    area: 'zone',
+    areas: 'zones',
+    group: 'groupe',
+    province: 'province',
+    district: 'district',
+    zone: 'zone',
+    'health zone': 'zone de santé',
+    'health area': 'aire de santé',
+    households: 'ménages',
+    people: 'personnes',
+    records: 'enregistrements',
+  };
+  const lw = (w, d) => (w ? (LANG === 'fr' && GEN_FR[w.toLowerCase()]) || w : t(d));
   LBL = {
-    node: (src.meta && src.meta.nodeLabel) || 'place',
-    group: (src.meta && src.meta.groupLabel) || 'group',
-    unit: (src.meta && src.meta.unit) || 'records',
+    get node() {
+      return lw(RAW.node, 'nodeDefault');
+    },
+    get group() {
+      return lw(RAW.group, 'groupDefault');
+    },
+    get unit() {
+      return lw(RAW.unit, 'unitDefault');
+    },
   };
   if (typeof D.maxDay !== 'number') D.maxDay = Math.max(0, ...E.map(e => e[0]));
   upTo = D.maxDay;
@@ -3208,6 +4410,11 @@ function loadSource(src) {
     slider.max = D.maxDay;
     slider.value = upTo;
   }
+  $('#slFrom').max = D.maxDay;
+  $('#slFrom').value = 0;
+  buildPeriods();
+  fillFilters();
+  renderTheme();
   size();
   if (typeof simStop === 'function') simStop();
   rebuild();
@@ -3221,30 +4428,73 @@ function applyMeta() {
   const m = D.meta || {};
   const title = m.title || 'Flow map';
   document.title = title;
+  const insideOnly = E.length > 0 && E.every(e => e[1] === e[2]);
   $('#title').textContent = title;
-  $('#subtitle').textContent =
-    m.subtitle ||
-    'Each dot is one ' +
-      LBL.node +
-      ', each line a flow between two of them. Drag the layout slider to move between true geography and a network view.';
-  $('#lgUnit').textContent = LBL.unit;
-  $('#lgNode').textContent = LBL.node;
+  if (/^#[0-9a-f]{3,8}$/i.test(m.accent || ''))
+    document.documentElement.style.setProperty('--accent', m.accent);
+  $('#subtitle').textContent = m.subtitle || t('subDots', LBL.node, insideOnly) + t('subTail');
+  $('#subtitle').title = $('#subtitle').textContent;
   const th = $('#tbHead');
   if (th) {
     th.innerHTML =
       '<tr><th>' +
-      cap(LBL.node) +
+      esc(cap(LBL.node)) +
       '</th>' +
-      (LBL.group && LBL.group !== 'group' ? '<th>' + cap(LBL.group) + '</th>' : '') +
-      '<th>Arrived</th><th>Left</th><th>Inside</th><th>Net</th></tr>';
+      (LBL.group && LBL.group !== 'group' && LBL.group !== 'groupe'
+        ? '<th>' + esc(cap(LBL.group)) + '</th>'
+        : '') +
+      '<th>' +
+      esc(cap(wArr())) +
+      '</th><th>' +
+      esc(cap(wLeft())) +
+      '</th><th>' +
+      t('thInside') +
+      '</th><th>' +
+      t('thNet') +
+      '</th></tr>';
   }
   $('#bLim').textContent =
-    'Limits: ' +
-    (limitMode === 'districts' ? 'level 2' : limitMode === 'governorates' ? 'level 1' : 'off');
-  const note = $('#noteSource');
-  if (note) note.textContent = m.source ? 'Source: ' + m.source + '.' : '';
+    limitMode === 'districts'
+      ? t('limitsL2')
+      : limitMode === 'governorates'
+        ? t('limitsL1')
+        : t('limitsOff');
+  renderNotes();
 }
 const cap = s => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+/* names of the two quantities: the author's own (Households targeted / Products distributed) or the standard words */
+function qCustom() {
+  const m = (D && D.meta) || {};
+  return Boolean(m.inLabel || m.outLabel);
+}
+function qIn() {
+  const m = (D && D.meta) || {};
+  return m.inLabel || (LANG === 'fr' ? 'entrées' : 'in');
+}
+function qOut() {
+  const m = (D && D.meta) || {};
+  return m.outLabel || (LANG === 'fr' ? 'sorties' : 'out');
+}
+function wArr() {
+  return qCustom() ? qIn() : LANG === 'fr' ? 'arrivés' : 'arrived';
+}
+function wLeft() {
+  return qCustom() ? qOut() : LANG === 'fr' ? 'partis' : 'left';
+}
+function legendWords() {
+  if (qCustom())
+    return LANG === 'fr'
+      ? ['Plus de ' + qIn() + ' que de ' + qOut(), 'Plus de ' + qOut() + ' que de ' + qIn()]
+      : ['More ' + qIn() + ' than ' + qOut(), 'More ' + qOut() + ' than ' + qIn()];
+  return LANG === 'fr'
+    ? [FRTXT['More in than out'], FRTXT['More out than in']]
+    : ['More in than out', 'More out than in'];
+}
+function renderLabels() {
+  const w = legendWords();
+  if ($('#lgIn')) $('#lgIn').textContent = w[0];
+  if ($('#lgOut')) $('#lgOut').textContent = w[1];
+}
 
 /* Web Mercator projection. Tiles, districts and admin limits all go through
    the same transform, which is why they line up. The zoom is the deepest one
@@ -3260,19 +4510,21 @@ function mercY(lat, z) {
 let MAP = { z: 6, s: 1, ox: 0, oy: 0, minX: 0, minY: 0, spanX: 1, spanY: 1 };
 let GOVPATH = {},
   DISTPATH = {};
+let VIEW = null; // {lon0, lon1, lat0, lat1} set by zoom/pan; null = fit the data
 function project() {
-  const pad = 26,
+  const V = VIEW || B;
+  const pad = VIEW ? 0 : 26,
     availW = Math.max(120, W - 2 * pad),
     availH = Math.max(120, H - 2 * pad);
   const span = z => ({
-    x: mercX(B.lon1, z) - mercX(B.lon0, z),
-    y: mercY(B.lat0, z) - mercY(B.lat1, z),
+    x: mercX(V.lon1, z) - mercX(V.lon0, z),
+    y: mercY(V.lat0, z) - mercY(V.lat1, z),
   });
   // Deepest zoom whose tiles are still drawn big enough to read (a 256 px
   // tile should land on at least ~110 CSS px). The scale k always fits the
   // whole country inside the frame, so nothing is cropped.
   let z = 3;
-  for (let zz = 3; zz <= 12; zz++) {
+  for (let zz = 3; zz <= 16; zz++) {
     const s = span(zz),
       k = Math.min(availW / s.x, availH / s.y);
     if (TX * k >= 110) z = zz;
@@ -3285,8 +4537,8 @@ function project() {
     s: k,
     ox: (W - s.x * k) / 2,
     oy: (H - s.y * k) / 2,
-    minX: mercX(B.lon0, z),
-    minY: mercY(B.lat1, z),
+    minX: mercX(V.lon0, z),
+    minY: mercY(V.lat1, z),
     spanX: s.x,
     spanY: s.y,
   };
@@ -3327,6 +4579,7 @@ function project() {
     });
     DISTPATH[name] = rings;
   }
+  buildThemePaths();
 }
 
 /* Background maps. Every provider is a public tile server: no API key, no
@@ -3429,21 +4682,51 @@ function tileFor(p, z, x, y) {
   const key = p + '|' + z + '|' + x + '|' + y;
   let e = TILES.get(key);
   if (e) return e;
-  e = { img: new Image(), ok: false, err: false };
+  e = { img: null, ok: false, err: false, tainted: false };
   TILES.set(key, e);
-  e.img.onload = () => {
-    e.ok = true;
-    PSTAT[p].ok++;
-    if (RM) draw(0);
+  const url = PROV[p].u(z, x, y);
+  // First with CORS: a tile loaded that way never blocks reading the canvas
+  // back, which is what GIF, video and PDF export need. A server that sends
+  // no CORS header is retried as a plain image: it still shows on screen, but
+  // is marked `tainted` so exports leave it out instead of failing.
+  const load = cors => {
+    const img = new Image();
+    if (cors) img.crossOrigin = 'anonymous';
+    e.img = img;
+    img.onload = () => {
+      e.ok = true;
+      e.tainted = !cors;
+      PSTAT[p].ok++;
+      if (RM) draw(0);
+    };
+    img.onerror = () => {
+      if (cors) return load(false);
+      e.err = true;
+      PSTAT[p].err++;
+      providerFailed(p);
+      if (RM) draw(0);
+    };
+    img.src = url;
   };
-  e.img.onerror = () => {
-    e.err = true;
-    PSTAT[p].err++;
-    providerFailed(p);
-    if (RM) draw(0);
-  };
-  e.img.src = PROV[p].u(z, x, y);
+  load(true);
   return e;
+}
+let NOTAINT = false; // true while exporting: tiles that would block read-back are skipped
+function pendingTiles() {
+  const prefix = curProv() + '|' + MAP.z + '|';
+  let n = 0;
+  for (const [key, e] of TILES) if (key.startsWith(prefix) && !e.ok && !e.err) n++;
+  return n;
+}
+function waitForTiles(ms = 7000) {
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    const check = () => {
+      if (pendingTiles() === 0 || performance.now() - t0 > ms) return resolve();
+      setTimeout(check, 120);
+    };
+    check();
+  });
 }
 function providerFailed(p) {
   const st = PSTAT[p];
@@ -3455,10 +4738,10 @@ function providerFailed(p) {
   if (i < 0 || i < provIdx) return; // already moved past this one
   if (i + 1 < chain.length) {
     provIdx = i + 1;
-    provMsg = PROV[p].n + ' would not serve tiles — switched to ' + PROV[chain[i + 1]].n;
+    provMsg = t('provSwitched', PROV[p].n, PROV[chain[i + 1]].n);
   } else {
     provIdx = chain.length;
-    provMsg = PROV[p].n + ' would not serve tiles — showing boundaries only';
+    provMsg = t('provNone', PROV[p].n);
   }
   updateStatus();
 }
@@ -3479,7 +4762,7 @@ function drawBasemap(alpha = 1) {
   for (let ty = y0; ty <= y1; ty++)
     for (let tx = x0; tx <= x1; tx++) {
       const e = tileFor(p, z, tx, ty);
-      if (e.ok) ctx.drawImage(e.img, cx(tx), cy(ty), size, size);
+      if (e.ok && !(NOTAINT && e.tainted)) ctx.drawImage(e.img, cx(tx), cy(ty), size, size);
     }
   ctx.filter = 'none';
   if (st.overlay) {
@@ -3495,25 +4778,24 @@ function updateStatus() {
   let s;
   const hasLimits = Boolean(D.admin1 || D.admin2);
   if (blend > 0.6) {
-    s =
-      'Network layout — the map is hidden. Drag the layout slider back towards Geo to see it again.';
-    if (hasLimits) s += ' Loaded limits: ' + limitLayers().length + '.';
+    s = t('bmNetwork');
+    if (hasLimits) s += t('bmLoadedLimits') + limitLayers().length + '.';
   } else if (style === 'none') {
-    s =
-      'No background map — places sit on their true coordinates' +
-      (hasLimits ? ', with the administrative limits drawn.' : '.');
+    s = t('bmNone', hasLimits);
   } else if (!p) {
-    s =
-      'No background map available — places are still placed on their true coordinates. <span class="warn">' +
-      provMsg +
-      '</span>';
+    s = t('bmNoProv') + '<span class="warn">' + provMsg + '</span>';
   } else {
     s =
-      'Background: <b>' +
+      t('bmBackground') +
+      '<b>' +
       PROV[p].n +
-      '</b> — public tiles, no API key, no sign-up.' +
+      '</b>' +
+      t('bmPublic') +
       (provMsg ? ' <span class="warn">' + provMsg + '</span>' : '');
   }
+  const loops = typeof E !== 'undefined' && E ? E.filter(e => e[1] === e[2]).length : 0;
+  if (loops && typeof E !== 'undefined' && loops === E.length)
+    s += ' <span class="warn">' + t('bmLoops') + '</span>';
   $('#bm').innerHTML = s;
 }
 
@@ -3599,25 +4881,33 @@ function rebuild() {
     n.within = 0;
     n.active = false;
   }
-  const m = new Map();
+  const m = new Map(),
+    mi = new Map();
   totalHH = 0;
+  totalIn = 0;
   for (const e of E) {
-    if (e[0] > upTo) continue;
+    if (e[0] > upTo || e[0] < FROM) continue;
     const o = e[1],
       d = e[2],
-      h = e[3];
+      h = e[3],
+      hin = e.length > 4 && e[4] != null && !isNaN(+e[4]) ? +e[4] : h;
+    if (FILT.fd >= 0) {
+      if (o !== FILT.fd && d !== FILT.fd) continue;
+    } else if (FILT.fg && N[o].gov !== FILT.fg && N[d].gov !== FILT.fg) continue;
     totalHH += h;
+    totalIn += hin;
     if (o === d) {
       N[o].within += h;
       N[o].active = true;
       continue;
     }
     N[o].out += h;
-    N[d].inn += h;
+    N[d].inn += hin;
     N[o].active = true;
     N[d].active = true;
     const k = o * 1000 + d;
     m.set(k, (m.get(k) || 0) + h);
+    mi.set(k, (mi.get(k) || 0) + hin);
   }
   act = N.filter(n => n.active);
   for (const n of act) {
@@ -3641,6 +4931,7 @@ function rebuild() {
       source: N[o],
       target: N[d],
       w,
+      wi: mi.get(k) || 0,
       same: N[o].gov === N[d].gov,
       ph: [],
       sp: 0.6 + ((o * 7 + d * 13) % 10) / 12,
@@ -3657,25 +4948,35 @@ function rebuild() {
         l.ph.push(((l.source.i * 31 + l.target.i * 17 + j * 977) % 1000) / 1000);
     }
   }
+  allLinks = links;
+  // the route limit keeps the strongest routes on the map; the analysis below
+  // always covers every route of the selection
+  const topEl = $('#topN');
+  topEl.max = Math.max(5, allLinks.length);
+  topEl.min = Math.min(5, topEl.max);
+  topEl.value = TOPN === null ? topEl.max : Math.min(TOPN, topEl.max);
+  $('#topNVal').textContent =
+    TOPN === null || TOPN >= allLinks.length
+      ? String(allLinks.length)
+      : TOPN + ' / ' + allLinks.length;
+  if (TOPN !== null && TOPN < allLinks.length)
+    links = allLinks
+      .slice()
+      .sort((a, b) => b.w - a.w)
+      .slice(0, TOPN);
   topIds = act
     .slice()
     .sort((a, b) => b.t - a.t)
     .slice(0, 10)
     .map(n => n.i);
+  const headBits = [periodLabel(), FILT.fd >= 0 ? N[FILT.fd].name : FILT.fg].filter(Boolean);
   $('#stats').innerHTML =
-    '<b>' +
-    fmt(totalHH) +
-    '</b> ' +
-    LBL.unit +
-    ' · <b>' +
-    fmt(act.length) +
-    '</b> ' +
-    plural(LBL.node) +
-    ' · <b>' +
-    fmt(links.length) +
-    '</b> routes';
-  $('#dt').textContent = fd(upTo);
+    (headBits.length ? '<div class="sh">' + esc(headBits.join(' · ')) + '</div>' : '') +
+    t('statsLine', totalHH, LBL.unit, { n: act.length, word: plural(LBL.node) }, allLinks.length);
+  $('#dt').textContent = FROM > 0 && FROM < upTo ? fd(FROM) + ' – ' + fd(upTo) : fd(upTo);
   table();
+  renderDash();
+  renderPeriods();
 }
 const IRREGULAR = {
   person: 'people',
@@ -3694,6 +4995,8 @@ const IRREGULAR = {
 const ALREADY_PLURAL = new Set(['people', 'children', 'men', 'women', 'staff', 'police', 'data']);
 function plural(word) {
   const w = String(word || 'item');
+  if (LANG === 'fr')
+    return /[sxz]$/i.test(w) ? w : /al$/i.test(w) ? w.slice(0, -2) + 'aux' : w + 's';
   const k = w.toLowerCase();
   if (ALREADY_PLURAL.has(k)) return w;
   if (IRREGULAR[k]) return IRREGULAR[k];
@@ -3820,7 +5123,8 @@ function viewPositions() {
    travellers, places and labels. The map fades out as the network takes over,
    so the two layouts are one continuous view rather than two screens. */
 
-function draw(t) {
+function draw(ms) {
+  const dl = SHOW_FLOWS ? links : [];
   viewPositions();
   const b = blend;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -3828,13 +5132,14 @@ function draw(t) {
   ctx.fillRect(0, 0, W, H);
   if (b < 0.98) {
     drawBasemap(1 - b);
+    drawTheme(1 - b);
     drawLimits(1 - b);
   }
   const hv = hover;
   let nb = null;
   if (hv) {
     nb = new Set([hv.i]);
-    for (const l of links)
+    for (const l of dl)
       if (l.source === hv || l.target === hv) {
         nb.add(l.source.i);
         nb.add(l.target.i);
@@ -3842,7 +5147,7 @@ function draw(t) {
   }
   ctx.lineCap = 'round';
   ctx.strokeStyle = C.edge;
-  for (const l of links) {
+  for (const l of dl) {
     const s = l.source,
       e = l.target,
       dx = e.rx - s.rx,
@@ -3857,21 +5162,57 @@ function draw(t) {
     ctx.lineWidth = Math.min(3.2, 0.4 + Math.sqrt(l.w) * 0.1) * (hl ? 1.6 : 1);
     ctx.setLineDash(l.same && b < 0.98 ? [2, 3] : []);
     ctx.beginPath();
-    ctx.moveTo(s.rx, s.ry);
-    ctx.quadraticCurveTo(l.cx, l.cy, e.rx, e.ry);
+    if (s === e) {
+      // A flow from a place to itself has no length: a straight or quadratic
+      // path between one point and itself is invisible, which reads as "the
+      // flows are missing". Draw a small loop beside the dot instead.
+      const r = 7 + Math.min(8, Math.sqrt(l.w) * 1.6);
+      ctx.arc(s.rx + r * 0.7, s.ry - r * 0.7, r, 0, 6.2832);
+    } else {
+      ctx.moveTo(s.rx, s.ry);
+      ctx.quadraticCurveTo(l.cx, l.cy, e.rx, e.ry);
+    }
     ctx.stroke();
   }
   ctx.setLineDash([]);
-  if (!RM) {
+  if (dl.length <= 150) {
+    // arrowheads at the middle of each route: the direction stays readable
+    // when the page is printed or exported, where nothing moves
+    ctx.fillStyle = C.edge;
+    for (const l of dl) {
+      const s = l.source,
+        e = l.target;
+      if (s === e) continue;
+      const hl = hv && (s === hv || e === hv);
+      ctx.globalAlpha = hv ? (hl ? 0.95 : 0.12) : 0.8;
+      const x = 0.25 * s.rx + 0.5 * l.cx + 0.25 * e.rx,
+        y = 0.25 * s.ry + 0.5 * l.cy + 0.25 * e.ry;
+      const ang = Math.atan2(e.ry - s.ry, e.rx - s.rx);
+      const sz = 3.5 + Math.min(3.5, Math.sqrt(l.w) * 0.08);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(sz, 0);
+      ctx.lineTo(-sz * 0.8, -sz * 0.75);
+      ctx.lineTo(-sz * 0.8, sz * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  {
+    // the dots travelling along the lines are the flow: they are drawn on
+    // every frame, reduced motion or not
     ctx.fillStyle = C.spark;
-    for (const l of links) {
+    for (const l of dl) {
       if (!l.ph.length) continue;
       const hl = hv && (l.source === hv || l.target === hv);
       ctx.globalAlpha = hv ? (hl ? 0.95 : 0.1) : 0.8;
       const s = l.source,
         e = l.target;
       for (const p of l.ph) {
-        const u = (p + t * 0.00012 * l.sp) % 1,
+        const u = (p + ms * 0.00012 * l.sp) % 1,
           v = 1 - u;
         const x = v * v * s.rx + 2 * v * u * l.cx + u * u * e.rx,
           y = v * v * s.ry + 2 * v * u * l.cy + u * u * e.ry;
@@ -3895,6 +5236,27 @@ function draw(t) {
       ctx.beginPath();
       ctx.arc(n.rx, n.ry, n.r + 3.2, 0, 6.2832);
       ctx.stroke();
+    }
+  }
+  {
+    // The records counted inside a place travel round its ring. Without them a
+    // table whose every row is one point - a synthesis per village, which has
+    // no movement to draw - is a field of still dots, and that reads as a page
+    // that does not work. This is the same idea as the sparks on a line, one
+    // ring closer in.
+    ctx.fillStyle = C.spark;
+    for (const n of act) {
+      if (!(n.within > 0)) continue;
+      const dim = hv && !nb.has(n.i);
+      const ring = n.r + 3.2;
+      const count = Math.min(3, 1 + Math.floor(Math.log2(1 + n.within) / 2));
+      ctx.globalAlpha = dim ? 0.12 : 0.85;
+      for (let k = 0; k < count; k++) {
+        const a = ms * 0.0009 * (0.7 + ((n.i * 7 + k * 13) % 10) / 12) + k * 2.09 + n.i * 1.7;
+        ctx.beginPath();
+        ctx.arc(n.rx + Math.cos(a) * ring, n.ry + Math.sin(a) * ring, 1.5, 0, 6.2832);
+        ctx.fill();
+      }
     }
   }
   if (hv) {
@@ -3930,7 +5292,7 @@ function draw(t) {
     ctx.font = '10px "IBM Plex Mono",ui-monospace,monospace';
     ctx.fillStyle = C.ring;
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Network layout — distance has no geographic meaning', 6, H - 6);
+    ctx.fillText(t('netLayout'), 6, H - 6);
     ctx.globalAlpha = 1;
   }
   if (b < 0.98 && curProv()) {
@@ -3942,11 +5304,11 @@ function draw(t) {
     ctx.globalAlpha = 1;
   }
 }
-function loop(t) {
+function loop(now) {
   // a throw here would otherwise repeat sixty times a second and leave the
   // canvas blank with no explanation
   try {
-    draw(t);
+    draw(now);
   } catch (err) {
     if (typeof showFailure === 'function') showFailure(err);
     return;
@@ -5207,7 +6569,8 @@ function buildStandaloneHTML() {
   // immediately before </head>, which is what keeps this from matching the
   // same text where it appears inside the app's own source.
   const anchor = new RegExp('<script data-preload>[\\s\\S]*?</' + 'script>(?=</head>)');
-  const clean = src.replace(anchor, '');
+  // the embed switches belong to the frame, not to the saved page
+  const clean = src.replace(anchor, '').replace(/(<html\b[^>]*?)\sclass="[^"]*"/, '$1');
   const payload = JSON.stringify({
     meta: D.meta,
     nodes: D.nodes,
@@ -5216,6 +6579,7 @@ function buildStandaloneHTML() {
     total: D.total,
     admin1: D.admin1,
     admin2: D.admin2,
+    theme: D.theme,
   }).replace(/<\//g, '<\\/');
   const open = '<script data-preload>';
   const preload = open + 'window.__PRELOAD__=' + payload + ';</' + 'script>';
@@ -5227,7 +6591,7 @@ function buildStandaloneHTML() {
 function downloadBytes(fileName, bytes, mime) {
   const blob = new Blob([bytes], { type: mime });
   if (typeof globalThis.__recordDownload === 'function')
-    globalThis.__recordDownload(fileName, blob.size ?? bytes.length ?? 0, mime);
+    globalThis.__recordDownload(fileName, blob.size ?? bytes.length ?? 0, mime, blob);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -5289,13 +6653,28 @@ function canvasReadable() {
   }
 }
 
+/** Skip the tiles that block read-back and clear the canvas's "tainted" mark. */
+function makeReadable() {
+  NOTAINT = true;
+  cv.width = cv.width; // resetting the bitmap makes the canvas origin-clean again
+  draw(0);
+  return canvasReadable();
+}
+function endReadable() {
+  NOTAINT = false;
+  draw(0);
+}
+
 function exportGIF(options = {}) {
-  const wanted = style;
-  let tainted = !canvasReadable();
-  if (tainted) setStyle('none'); // tiles taint the canvas, so drop them
-  const frames = captureFrames({ width: options.width || 720, maxFrames: options.maxFrames || 60 });
-  const bytes = encodeGIF(frames, { delay: options.delay || 8 });
-  if (tainted) setStyle(wanted);
+  const tainted = !canvasReadable();
+  if (tainted) makeReadable();
+  let frames, bytes;
+  try {
+    frames = captureFrames({ width: options.width || 720, maxFrames: options.maxFrames || 60 });
+    bytes = encodeGIF(frames, { delay: options.delay || 8 });
+  } finally {
+    if (tainted) endReadable();
+  }
   return {
     bytes,
     frames: frames.length,
@@ -5310,6 +6689,8 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
   return new Promise((resolve, reject) => {
     if (typeof MediaRecorder === 'undefined')
       return reject(new Error('MediaRecorder is not available.'));
+    const wasTainted = !canvasReadable();
+    if (wasTainted) makeReadable();
     const stream = cv.captureStream(fps);
     const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m =>
       MediaRecorder.isTypeSupported(m),
@@ -5330,7 +6711,7 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
     rebuild();
     rec.start(200);
     playing = true;
-    $('#bPlay').textContent = 'Pause';
+    $('#bPlay').textContent = t('pause');
     const tick = Math.max(40, Math.round((seconds * 1000) / (D.maxDay + 1)));
     timer = setInterval(() => {
       upTo = Math.min(D.maxDay, upTo + 1);
@@ -5342,14 +6723,366 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
     rec.onstop = () => {
       clearInterval(timer);
       playing = false;
-      $('#bPlay').textContent = 'Play';
+      $('#bPlay').textContent = t('play');
+      if (wasTainted) endReadable();
       resolve({ blob: new Blob(chunks, { type: mime }), mime });
     };
   });
 }
 
+/* ------------------------------------------------------------------- PDF */
+/* A printable map: title, period, the map itself, north arrow, scale bar,
+   legend and source, on an A4 page whose orientation follows the shape of the
+   data (tall extent -> portrait, wide -> landscape). The page is composed on
+   a canvas at ~200 dpi and wrapped in a one-page PDF. */
+
+function niceLength(maxMetres) {
+  const pow = Math.pow(10, Math.floor(Math.log10(maxMetres)));
+  for (const m of [5, 2, 1]) if (m * pow <= maxMetres) return m * pow;
+  return pow;
+}
+function wrapText(c, text, maxW) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (c.measureText(t).width > maxW && line) {
+      lines.push(line);
+      line = w;
+    } else line = t;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** The map alone, drawn to a canvas of the given pixel size. */
+async function renderMapCanvas(pxW, pxH) {
+  const keep = { W, H, dpr, w: cv.width, h: cv.height, ch: cv.style.height };
+  const scale = Math.max(1, Math.min(3.2, pxW / 760));
+  W = Math.round(pxW / scale);
+  H = Math.round(pxH / scale);
+  dpr = scale;
+  cv.width = pxW;
+  cv.height = pxH;
+  try {
+    project();
+    draw(0);
+    await waitForTiles();
+    project();
+    draw(0);
+    const out = document.createElement('canvas');
+    out.width = pxW;
+    out.height = pxH;
+    out.getContext('2d').drawImage(cv, 0, 0);
+    return { canvas: out, mapW: W, mapH: H, scale };
+  } finally {
+    W = keep.W;
+    H = keep.H;
+    dpr = keep.dpr;
+    cv.width = keep.w;
+    cv.height = keep.h;
+    cv.style.height = keep.ch;
+    project();
+    draw(0);
+  }
+}
+
+async function composePage() {
+  const meta = (D && D.meta) || {};
+  // orientation from the frame the map is shown on (the data, or the zoomed view)
+  const V = VIEW || B;
+  const z = 8;
+  const ext = {
+    x: mercX(V.lon1, z) - mercX(V.lon0, z),
+    y: mercY(V.lat0, z) - mercY(V.lat1, z),
+  };
+  const portrait = blend < 0.02 ? ext.y > ext.x * 1.1 : H > W * 1.1;
+  const dpi = 200;
+  const mm = v => Math.round((v / 25.4) * dpi);
+  const pageW = mm(portrait ? 210 : 297),
+    pageH = mm(portrait ? 297 : 210);
+  const unit = pageW / 1000; // type scales with the page
+  const margin = Math.round(12 * (dpi / 25.4));
+  const page = document.createElement('canvas');
+  page.width = pageW;
+  page.height = pageH;
+  const c = page.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, pageW, pageH);
+  const ink = '#14202b',
+    muted = '#5b6b7a';
+
+  // header
+  let y = margin;
+  c.fillStyle = ink;
+  c.textBaseline = 'top';
+  c.font = '700 ' + Math.round(34 * unit) + 'px system-ui, "Segoe UI", Arial, sans-serif';
+  const titleLines = wrapText(c, meta.title || 'Flow map', pageW - 2 * margin);
+  for (const l of titleLines) {
+    c.fillText(l, margin, y);
+    y += Math.round(40 * unit);
+  }
+  c.fillStyle = muted;
+  c.font = Math.round(17 * unit) + 'px system-ui, "Segoe UI", Arial, sans-serif';
+  const period = meta.dateStart ? fd(0) + ' – ' + fd(upTo) : fd(upTo);
+  const sub = [meta.subtitle, period].filter(Boolean).join('  ·  ');
+  for (const l of wrapText(c, sub, pageW - 2 * margin).slice(0, 3)) {
+    c.fillText(l, margin, y);
+    y += Math.round(22 * unit);
+  }
+  y += Math.round(8 * unit);
+
+  // footer height first (legend + source), then the map takes what is left
+  const fs = Math.round(14 * unit);
+  const legendItems = [
+    [C.node[0], legendWords()[0]],
+    [C.node[1], legendWords()[1]],
+    [C.node[2], LANG === 'fr' ? FRTXT['Roughly balanced'] : 'Roughly balanced'],
+  ];
+  const note = t('pdfNote', LBL.unit, LBL.node, fmt(totalHH));
+  c.font = fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
+  const noteLines = wrapText(c, note, pageW - 2 * margin);
+  const srcText = meta.source ? t('pdfSource') + meta.source : '';
+  const themeOn = Boolean(TH && THEME_ON);
+  const footH =
+    (TH && THEME_ON ? Math.round(24 * unit) : 0) +
+    Math.round(26 * unit) +
+    noteLines.length * Math.round(19 * unit) +
+    (srcText ? Math.round(24 * unit) : 0) +
+    Math.round(10 * unit);
+  const mapX = margin,
+    mapY = y,
+    mapW = pageW - 2 * margin,
+    mapH = pageH - margin - footH - mapY;
+
+  const r = await renderMapCanvas(mapW, mapH);
+  c.drawImage(r.canvas, mapX, mapY);
+  c.strokeStyle = ink;
+  c.lineWidth = Math.max(1, Math.round(2 * unit));
+  c.strokeRect(mapX, mapY, mapW, mapH);
+
+  // north arrow and scale bar only mean something on the geographic layout
+  if (blend < 0.02) {
+    const ax = mapX + mapW - Math.round(46 * unit),
+      ay = mapY + Math.round(18 * unit),
+      ah = Math.round(44 * unit);
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.fillRect(
+      ax - Math.round(20 * unit),
+      ay - Math.round(8 * unit),
+      Math.round(40 * unit),
+      ah + Math.round(34 * unit),
+    );
+    c.fillStyle = ink;
+    c.beginPath();
+    c.moveTo(ax, ay);
+    c.lineTo(ax - Math.round(11 * unit), ay + ah);
+    c.lineTo(ax, ay + ah * 0.74);
+    c.lineTo(ax + Math.round(11 * unit), ay + ah);
+    c.closePath();
+    c.fill();
+    c.font = '700 ' + Math.round(18 * unit) + 'px system-ui, Arial, sans-serif';
+    c.textAlign = 'center';
+    c.fillText('N', ax, ay + ah + Math.round(4 * unit));
+    c.textAlign = 'left';
+
+    // metres per map pixel at the centre of the frame
+    const k = MAP.s,
+      midLat = screenToLonLat(r.mapW / 2, r.mapH / 2).lat;
+    const mPerCssPx =
+      (2 * Math.PI * 6378137 * Math.cos((midLat * Math.PI) / 180)) / (TX * Math.pow(2, MAP.z)) / k;
+    const target = niceLength(mPerCssPx * r.mapW * 0.22);
+    const barPx = (target / mPerCssPx) * (mapW / r.mapW);
+    const bx = mapX + Math.round(22 * unit),
+      by = mapY + mapH - Math.round(40 * unit),
+      bh = Math.round(9 * unit);
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.fillRect(
+      bx - Math.round(10 * unit),
+      by - Math.round(30 * unit),
+      barPx + Math.round(80 * unit),
+      Math.round(62 * unit),
+    );
+    for (let i = 0; i < 4; i++) {
+      c.fillStyle = i % 2 ? '#ffffff' : ink;
+      c.fillRect(bx + (barPx / 4) * i, by, barPx / 4, bh);
+    }
+    c.strokeStyle = ink;
+    c.lineWidth = Math.max(1, Math.round(1.5 * unit));
+    c.strokeRect(bx, by, barPx, bh);
+    c.fillStyle = ink;
+    c.font = Math.round(15 * unit) + 'px system-ui, Arial, sans-serif';
+    c.fillText('0', bx - 3, by - Math.round(20 * unit));
+    c.fillText(
+      target >= 1000 ? target / 1000 + ' km' : target + ' m',
+      bx + barPx + Math.round(8 * unit),
+      by - 2,
+    );
+  } else {
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.fillRect(
+      mapX + 10,
+      mapY + mapH - Math.round(40 * unit),
+      Math.round(330 * unit),
+      Math.round(30 * unit),
+    );
+    c.fillStyle = muted;
+    c.font = 'italic ' + fs + 'px system-ui, Arial, sans-serif';
+    c.fillText(t('netNotScale'), mapX + 18, mapY + mapH - Math.round(34 * unit));
+  }
+
+  // legend
+  let fy = mapY + mapH + Math.round(12 * unit);
+  let fx = margin;
+  c.font = fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
+  c.textBaseline = 'middle';
+  for (const [col, label] of legendItems) {
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(
+      fx + Math.round(7 * unit),
+      fy + Math.round(8 * unit),
+      Math.round(7 * unit),
+      0,
+      Math.PI * 2,
+    );
+    c.fill();
+    c.fillStyle = ink;
+    c.fillText(label, fx + Math.round(20 * unit), fy + Math.round(9 * unit));
+    fx += Math.round(34 * unit) + c.measureText(label).width + Math.round(14 * unit);
+  }
+  if (D.admin1 || D.admin2) {
+    c.strokeStyle = muted;
+    c.lineWidth = Math.max(1, Math.round(2 * unit));
+    c.strokeRect(fx, fy + Math.round(2 * unit), Math.round(20 * unit), Math.round(12 * unit));
+    c.fillStyle = ink;
+    c.fillText(t('pdfAdmin'), fx + Math.round(28 * unit), fy + Math.round(9 * unit));
+    fx += Math.round(40 * unit) + c.measureText(t('pdfAdmin')).width;
+  }
+  if (themeOn) {
+    // the area-value classes get their own row under the main legend
+    fy += Math.round(24 * unit);
+    let tx0 = margin;
+    c.fillStyle = ink;
+    c.font = '600 ' + fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
+    c.fillText(TH.label + ' :', tx0, fy + Math.round(9 * unit));
+    tx0 += c.measureText(TH.label + ' :').width + Math.round(12 * unit);
+    c.font = fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
+    for (let i = 0; i < TH.col.length; i++) {
+      c.fillStyle = TH.col[i];
+      c.fillRect(tx0, fy + Math.round(2 * unit), Math.round(22 * unit), Math.round(13 * unit));
+      c.strokeStyle = muted;
+      c.lineWidth = 1;
+      c.strokeRect(tx0, fy + Math.round(2 * unit), Math.round(22 * unit), Math.round(13 * unit));
+      c.fillStyle = ink;
+      c.fillText(TH.lab[i], tx0 + Math.round(28 * unit), fy + Math.round(9 * unit));
+      tx0 += Math.round(40 * unit) + c.measureText(TH.lab[i]).width;
+    }
+  }
+  c.textBaseline = 'top';
+  fy += Math.round(22 * unit);
+  c.fillStyle = muted;
+  for (const l of noteLines) {
+    c.fillText(l, margin, fy);
+    fy += Math.round(19 * unit);
+  }
+  if (srcText) {
+    c.fillStyle = ink;
+    c.fillText(srcText, margin, fy + Math.round(2 * unit));
+  }
+  return { page, portrait };
+}
+
+/** One-page PDF around a JPEG, sizes in PDF points. */
+function pdfFromJPEG(jpeg, pxW, pxH, ptW, ptH, title) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const offsets = [];
+  let length = 0;
+  const push = chunk => {
+    const bytes = typeof chunk === 'string' ? enc.encode(chunk) : chunk;
+    parts.push(bytes);
+    length += bytes.length;
+  };
+  const obj = (n, body) => {
+    offsets[n] = length;
+    push(n + ' 0 obj\n' + body + '\nendobj\n');
+  };
+  const safeTitle = String(title || 'Flow map')
+    .replace(/[^\x20-\x7e]/g, '?')
+    .replace(/[()\\]/g, '');
+  push('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n');
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(
+    3,
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' +
+      ptW.toFixed(2) +
+      ' ' +
+      ptH.toFixed(2) +
+      '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>',
+  );
+  offsets[4] = length;
+  push(
+    '4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' +
+      pxW +
+      ' /Height ' +
+      pxH +
+      ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' +
+      jpeg.length +
+      ' >>\nstream\n',
+  );
+  push(jpeg);
+  push('\nendstream\nendobj\n');
+  const content = 'q ' + ptW.toFixed(2) + ' 0 0 ' + ptH.toFixed(2) + ' 0 0 cm /Im0 Do Q';
+  obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
+  obj(6, '<< /Title (' + safeTitle + ') /Producer (FlowMap) >>');
+  const xref = length;
+  let table = 'xref\n0 7\n0000000000 65535 f \n';
+  for (let i = 1; i <= 6; i++) table += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+  push(table + 'trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n' + xref + '\n%%EOF');
+  const out = new Uint8Array(length);
+  let at = 0;
+  for (const b of parts) {
+    out.set(b, at);
+    at += b.length;
+  }
+  return out;
+}
+
+async function exportPDF() {
+  const tainted = !canvasReadable();
+  if (tainted) makeReadable();
+  try {
+    const { page, portrait } = await composePage();
+    const blob = await new Promise((res, rej) =>
+      page.toBlob(
+        b => (b ? res(b) : rej(new Error('Could not read the map back.'))),
+        'image/jpeg',
+        0.92,
+      ),
+    );
+    const jpeg = new Uint8Array(await blob.arrayBuffer());
+    const ptW = (portrait ? 210 : 297) * (72 / 25.4),
+      ptH = (portrait ? 297 : 210) * (72 / 25.4);
+    return {
+      bytes: pdfFromJPEG(jpeg, page.width, page.height, ptW, ptH, (D.meta || {}).title),
+      portrait,
+      tainted,
+    };
+  } finally {
+    if (tainted) endReadable();
+  }
+}
+
 /* ------------------------------------------------------------------ menu */
 const EXPORTS = [
+  [
+    'pdf',
+    'Map (PDF, A4)',
+    'Printable map: title, scale, legend, source; portrait or landscape to suit the data.',
+  ],
   [
     'gif',
     'Animation (GIF)',
@@ -5361,6 +7094,11 @@ const EXPORTS = [
   ['parquet', 'Map (GeoParquet)', 'One table with WKB geometry, for geopandas, DuckDB, BigQuery.'],
   ['shp', 'Map (Shapefile)', 'ZIP of places.shp, flows.shp, areas.shp with .prj, .shx and .dbf.'],
   ['csv', 'Data (CSV)', 'Two tables, places and flows, for the current day.'],
+  [
+    'embed',
+    'Embed (Experience Builder)…',
+    'Link, iframe code or single-file code to embed this page in ArcGIS Experience Builder.',
+  ],
   [
     'html',
     'Page (self-contained)',
@@ -5389,19 +7127,23 @@ async function runExport(kind) {
   } else if (kind === 'gif') {
     const { bytes, tainted, frames } = exportGIF();
     downloadBytes(slug + '.gif', bytes, 'image/gif');
-    if (tainted)
-      feedback(
-        'The map tiles do not allow pixel read-back, so the GIF is exported without a basemap.',
-      );
-    else feedback('Exported ' + frames + ' frames.');
+    if (tainted) feedback(t('gifNoBase', frames));
+    else feedback(t('exportedFrames', frames));
+  } else if (kind === 'pdf') {
+    feedback(t('pdfPrep'));
+    const { bytes, portrait, tainted } = await exportPDF();
+    downloadBytes(slug + '.pdf', bytes, 'application/pdf');
+    feedback(t('pdfDone', portrait, tainted));
+  } else if (kind === 'embed') {
+    openEmbed();
   } else if (kind === 'html') {
     downloadBytes(slug + '.html', buildStandaloneHTML(), 'text/html');
-    feedback('Saved the page with this dataset inside — one file, works offline.');
+    feedback(t('savedPage'));
   } else if (kind === 'webm') {
-    feedback('Recording the timeline…');
+    feedback(t('recording'));
     const { blob } = await exportVideo();
     downloadBytes(slug + '.webm', blob, 'video/webm');
-    feedback('Recorded.');
+    feedback(t('recorded'));
   }
 }
 
@@ -5424,7 +7166,14 @@ function slugify(s) {
 function size() {
   const w = Math.max(280, stage.clientWidth);
   W = w;
-  H = Math.round(Math.min(Math.max(w * 0.62, 440), 760));
+  H =
+    EMBED && innerWidth >= 1100
+      ? Math.round(
+          Math.max(innerHeight - (document.querySelector('.top').offsetHeight || 0) - 110, 380),
+        )
+      : innerWidth >= 1100
+        ? Math.round(Math.min(Math.max(innerHeight - 70 - 150, 500), 900))
+        : Math.round(Math.min(Math.max(w * 0.62, 440), 760));
   dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.width = W * dpr;
   cv.height = H * dpr;
@@ -5447,7 +7196,7 @@ function setBlend(v, redraw = true) {
   blend = Math.max(0, Math.min(1, v));
   $('#bld').value = String(Math.round(blend * 100));
   $('#layv').textContent =
-    blend < 0.02 ? 'Geo' : blend > 0.98 ? 'Network' : Math.round(blend * 100) + '%';
+    blend < 0.02 ? t('geo') : blend > 0.98 ? t('network') : Math.round(blend * 100) + '%';
   if (blend >= 0.02) configure(blend === 1 ? 0.9 : 0.25);
   else simStop();
   updateStatus();
@@ -5487,8 +7236,12 @@ function setLimit(mode) {
   }
   $('#bLim').hidden = false;
   limitMode = mode === 'off' || (mode && layers.includes(mode)) ? mode : layers[0];
-  const names = { districts: 'level 2', governorates: 'level 1' };
-  $('#bLim').textContent = 'Limits: ' + (names[limitMode] || limitMode);
+  $('#bLim').textContent =
+    limitMode === 'districts'
+      ? t('limitsL2')
+      : limitMode === 'governorates'
+        ? t('limitsL1')
+        : t('limitsOff');
   $('#bLim').setAttribute('aria-pressed', limitMode !== 'off' ? 'true' : 'false');
   if (RM) draw(0);
 }
@@ -5523,26 +7276,30 @@ function pick(ev) {
   return best;
 }
 function over(ev) {
+  if (typeof DRAG !== 'undefined' && DRAG && DRAG.moved) return;
   const n = pick(ev);
   if (n !== hover) {
     hover = n;
     if (RM) draw(0);
   }
-  if (n) {
-    tip.innerHTML =
-      '<b>' +
-      n.name +
-      '</b>' +
-      (n.gov ? ' · ' + n.gov : '') +
-      '\n' +
-      fmt(n.inn) +
-      ' arrived · ' +
-      fmt(n.out) +
-      ' left\n' +
-      fmt(n.within) +
-      ' moved inside\nnet ' +
-      (n.net > 0 ? '+' : '') +
-      fmt(n.net);
+  let html = null;
+  if (n) html = t('tipNode', n);
+  else if (TH) {
+    const rect = cv.getBoundingClientRect();
+    const a = themeAt(
+      (ev.clientX - rect.left) * (W / rect.width),
+      (ev.clientY - rect.top) * (H / rect.height),
+    );
+    if (a !== hoverTheme) {
+      hoverTheme = a;
+      if (RM) draw(0);
+    }
+    if (a) html = t('tipTheme', a, TH);
+  }
+  if (!n && !TH && hoverTheme) hoverTheme = null;
+  if (n && hoverTheme) hoverTheme = null;
+  if (html) {
+    tip.innerHTML = html;
     tip.style.whiteSpace = 'pre';
     tip.style.opacity = 1;
     const w = tip.offsetWidth,
@@ -5559,14 +7316,104 @@ cv.addEventListener('pointermove', over);
 cv.addEventListener('pointerdown', over);
 cv.addEventListener('pointerleave', () => {
   hover = null;
+  hoverTheme = null;
   tip.style.opacity = 0;
   if (RM) draw(0);
 });
+
+/* zoom and pan: wheel, drag (mouse), +/- buttons, double-click, Fit data */
+function screenToLonLat(px, py) {
+  const k = MAP.s,
+    z = MAP.z,
+    n = TX * Math.pow(2, z);
+  const wx = (px - MAP.ox) / k + MAP.minX,
+    wy = (py - MAP.oy) / k + MAP.minY;
+  const lon = (wx / n) * 360 - 180;
+  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * wy) / n))) * 180) / Math.PI;
+  return { lon, lat };
+}
+function setViewFromScreen(x0, y0, x1, y1) {
+  const a = screenToLonLat(x0, y0),
+    b = screenToLonLat(x1, y1);
+  const lon0 = Math.max(-180, Math.min(a.lon, b.lon)),
+    lon1 = Math.min(180, Math.max(a.lon, b.lon));
+  const lat0 = Math.max(-85, Math.min(a.lat, b.lat)),
+    lat1 = Math.min(85, Math.max(a.lat, b.lat));
+  if (lon1 - lon0 < 0.0005 || lat1 - lat0 < 0.0005) return;
+  VIEW = { lon0, lon1, lat0, lat1 };
+}
+function refreshView(settle) {
+  project();
+  if (settle && blend >= 0.02) configure(0.3);
+  if (RM) draw(0);
+}
+function zoomAt(px, py, factor) {
+  // factor > 1 zooms in: the point under (px, py) stays under it
+  const f = 1 / factor;
+  setViewFromScreen(px - px * f, py - py * f, px + (W - px) * f, py + (H - py) * f);
+  refreshView(true);
+}
+function fitData() {
+  VIEW = null;
+  refreshView(true);
+}
+cv.addEventListener(
+  'wheel',
+  ev => {
+    ev.preventDefault();
+    const r = cv.getBoundingClientRect();
+    zoomAt(ev.clientX - r.left, ev.clientY - r.top, Math.exp(-ev.deltaY * 0.0018));
+  },
+  { passive: false },
+);
+let DRAG = null;
+cv.addEventListener('pointerdown', ev => {
+  LASTDRAG = false;
+  if (ev.pointerType === 'touch' || ev.button !== 0) return;
+  DRAG = { x: ev.clientX, y: ev.clientY, moved: false, id: ev.pointerId };
+});
+cv.addEventListener('pointermove', ev => {
+  if (!DRAG) return;
+  const dx = ev.clientX - DRAG.x,
+    dy = ev.clientY - DRAG.y;
+  if (!DRAG.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+  if (!DRAG.moved) {
+    DRAG.moved = true;
+    try {
+      cv.setPointerCapture(DRAG.id);
+    } catch (e) {}
+    cv.style.cursor = 'grabbing';
+    hover = null;
+    tip.style.opacity = 0;
+  }
+  DRAG.x = ev.clientX;
+  DRAG.y = ev.clientY;
+  setViewFromScreen(-dx, -dy, W - dx, H - dy);
+  refreshView(false);
+});
+function endDrag() {
+  LASTDRAG = Boolean(DRAG && DRAG.moved);
+  if (DRAG && DRAG.moved) refreshView(true);
+  DRAG = null;
+  cv.style.cursor = '';
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('dblclick', ev => {
+  const r = cv.getBoundingClientRect();
+  zoomAt(ev.clientX - r.left, ev.clientY - r.top, 2);
+});
+$('#bZin').addEventListener('click', () => zoomAt(W / 2, H / 2, 1.6));
+$('#bZout').addEventListener('click', () => zoomAt(W / 2, H / 2, 1 / 1.6));
+$('#bFit').addEventListener('click', fitData);
 
 /* timeline */
 const sl = $('#sl');
 function setDay(day) {
   upTo = Math.max(0, Math.min(D.maxDay, day));
+  if (!CUM) FROM = Math.max(0, upTo - Math.max(1, Math.round((D.maxDay + 1) / 120)) + 1);
+  if (FROM > upTo) FROM = upTo;
+  $('#slFrom').value = FROM;
   sl.max = D.maxDay;
   sl.value = upTo;
   rebuild();
@@ -5576,7 +7423,7 @@ sl.addEventListener('input', () => setDay(+sl.value));
 function stop() {
   playing = false;
   clearInterval(timer);
-  $('#bPlay').textContent = 'Play';
+  $('#bPlay').textContent = t('play');
 }
 $('#bPlay').addEventListener('click', () => {
   if (playing) {
@@ -5585,15 +7432,17 @@ $('#bPlay').addEventListener('click', () => {
   }
   if (upTo >= D.maxDay) setDay(0);
   playing = true;
-  $('#bPlay').textContent = 'Pause';
+  $('#bPlay').textContent = t('pause');
   const step = Math.max(1, Math.round((D.maxDay + 1) / 120));
-  timer = setInterval(
-    () => {
-      setDay(upTo + step);
-      if (upTo >= D.maxDay) stop();
-    },
-    RM ? 400 : 110,
-  );
+  timer = setInterval(() => {
+    setDay(upTo + step);
+    if (upTo >= D.maxDay) stop();
+  }, 110);
+});
+$('#chkCum').addEventListener('change', ev => {
+  CUM = ev.target.checked;
+  if (CUM) FROM = 0;
+  setDay(upTo);
 });
 let rt;
 addEventListener('resize', () => {
@@ -5610,6 +7459,7 @@ const loader = {
   fileName: '',
   mapping: {},
   boundaries: [], // [{parsed, nameProp, file}]
+  theme: null, // values by area: {rows: [{name, value, rings}], label, source, count}
   options: {},
 };
 
@@ -5690,11 +7540,15 @@ function renderFields() {
     '<label for="oTitle">Title<input id="oTitle" type="text" value="' +
     esc(loader.options.title || '') +
     '"></label>' +
+    '<label for="oSubtitle">Subtitle<input id="oSubtitle" type="text" placeholder="one line under the title"></label>' +
     '<label for="oUnit">Unit, plural<input id="oUnit" type="text" placeholder="' +
     esc(guessUnitLabel(loader.mapping, t.headers)) +
     '"></label>' +
     '<label for="oNode">Call each row a<input id="oNode" type="text" placeholder="place"></label>' +
     '<label for="oGroup">Grouping column name<input id="oGroup" type="text" placeholder="group"></label>' +
+    '<label for="oOutLabel">Departure quantity name<input id="oOutLabel" type="text" placeholder="departures"></label>' +
+    '<label for="oInLabel">Arrival quantity name<input id="oInLabel" type="text" placeholder="arrivals"></label>' +
+    '<label for="oSource">Source note<input id="oSource" type="text" placeholder="where the data comes from"></label>' +
     '<label for="oDateMode">Dates are<select id="oDateMode">' +
     [
       ['auto', 'detected automatically'],
@@ -5712,11 +7566,12 @@ function renderFields() {
     (dateIsNumber ? '' : ' disabled') +
     '></label>' +
     '</div>';
-  ['oTitle', 'oUnit', 'oNode', 'oGroup'].forEach(id =>
-    $('#' + id).addEventListener('input', ev => {
-      loader.options[id.slice(1)] = ev.target.value;
-      validateLoader();
-    }),
+  ['oTitle', 'oSubtitle', 'oUnit', 'oNode', 'oGroup', 'oOutLabel', 'oInLabel', 'oSource'].forEach(
+    id =>
+      $('#' + id).addEventListener('input', ev => {
+        loader.options[id.slice(1)] = ev.target.value;
+        validateLoader();
+      }),
   );
   $('#oDateMode').addEventListener('change', ev => {
     const mode = ev.target.value;
@@ -5811,7 +7666,18 @@ async function takeTable(file) {
       table.rows,
       MAPPING_FIELDS.map(f => f[0]),
     );
-    loader.options = { title: '', unit: '', nodeLabel: 'place', groupLabel: '' };
+    loader.options = {
+      title: '',
+      subtitle: '',
+      unit: '',
+      nodeLabel: 'place',
+      groupLabel: '',
+      inLabel: '',
+      outLabel: '',
+      source: '',
+    };
+    loader.theme = null;
+    if ($('#themeList')) renderThemeValues();
     $('#fileTableInfo').textContent =
       file.name + ' — ' + table.rows.length.toLocaleString('en-US') + ' rows';
     $('#tablePanel').hidden = false;
@@ -5852,13 +7718,125 @@ async function takeBoundary(file) {
   }
 }
 
+/**
+ * Read a values-by-area file: a polygon GeoJSON carrying the value in its
+ * properties, or a table of area names and values matched to the boundaries.
+ */
+function themeRowsFromText(text, fileName) {
+  const trimmed = String(text || '').trim();
+  const looksJSON = /^[{[]/.test(trimmed);
+  if (looksJSON) {
+    let data;
+    try {
+      data = JSON.parse(trimmed);
+    } catch {
+      throw new Error('That area file is not valid JSON.');
+    }
+    const feats = data.features || (data.type === 'Feature' ? [data] : []);
+    if (!feats.length) throw new Error('Expected a GeoJSON FeatureCollection of areas.');
+    const parsed = parseBoundaryGeoJSON(trimmed, {});
+    const props = feats[0].properties || {};
+    const numeric = Object.keys(props).filter(
+      k =>
+        k !== parsed.nameProp && String(props[k] ?? '').trim() !== '' && Number.isFinite(+props[k]),
+    );
+    const col =
+      numeric.find(k => /val|total|count|pop|nombre|valeur|amount|quant/i.test(k)) ||
+      numeric.find(k => !/code|id$|^id/i.test(k)) ||
+      numeric[0] ||
+      '';
+    if (!col)
+      throw new Error(
+        'The polygon file has no numeric property to read a value from — name the column value, total, count…',
+      );
+    const raw = new Map(
+      feats.map(f => [keyName(String(f.properties?.[parsed.nameProp] ?? '')), f.properties || {}]),
+    );
+    const rows = parsed.features.map(f => ({
+      name: f.name,
+      rings: f.rings,
+      value: Number(raw.get(keyName(f.name))?.[col]),
+    }));
+    return { rows, label: col, fileName, count: rows.length };
+  }
+  const table = parseTable(trimmed, fileName);
+  if (!table.rows.length) throw new Error('That area file has no data rows.');
+  const headers = table.headers;
+  const nameCol =
+    headers.find(h => /name|area|district|region|gov|lieu|zone|commune|nom/i.test(h)) || '';
+  if (!nameCol)
+    throw new Error(
+      'No area name column found — the file needs a column of area names (name, area, district…).',
+    );
+  const valueCol =
+    headers.find(
+      h =>
+        h !== nameCol &&
+        columnIsNumeric(table.rows, h) &&
+        /val|total|count|pop|nombre|valeur|amount|quant/i.test(h),
+    ) ||
+    headers.find(h => h !== nameCol && columnIsNumeric(table.rows, h)) ||
+    '';
+  if (!valueCol) throw new Error('No numeric value column found in the area file.');
+  const rows = table.rows
+    .map(r => ({ name: String(r[nameCol] ?? '').trim(), value: r[valueCol] }))
+    .filter(r => r.name);
+  return { rows, label: valueCol, fileName, count: rows.length };
+}
+
+function renderThemeValues() {
+  const box = $('#themeList');
+  if (!box) return;
+  if (!loader.theme) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML =
+    '<div class="bound"><b>' +
+    esc(loader.theme.fileName) +
+    '</b> — ' +
+    loader.theme.count +
+    ' areas, value column "' +
+    esc(loader.theme.label) +
+    '"<button class="act tiny" data-rmtheme="1" type="button">Remove</button></div>';
+  box.querySelectorAll('button[data-rmtheme]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      loader.theme = null;
+      $('#fileThemeInfo').textContent = 'A polygon layer, or a table of area names and values';
+      renderThemeValues();
+      validateLoader();
+    }),
+  );
+}
+
+async function takeTheme(file) {
+  try {
+    const text = await readFileText(file);
+    const picked = themeRowsFromText(text, file.name);
+    if (!picked.rows.length) throw new Error('No area name in that file.');
+    loader.theme = { ...picked, source: 'Loaded from ' + file.name };
+    $('#fileThemeInfo').textContent =
+      file.name + ' — ' + picked.count + ' areas, value column "' + picked.label + '"';
+    renderThemeValues();
+    validateLoader();
+  } catch (e) {
+    feedback(e.message, true);
+    $('#err').textContent = e.message;
+    $('#err').hidden = false;
+  }
+}
+
 function buildFromLoader() {
   try {
     const opts = {
       title: loader.options.title || undefined,
+      subtitle: loader.options.subtitle || undefined,
       unit: loader.options.unit || undefined,
+      source: loader.options.source || undefined,
       nodeLabel: loader.options.nodeLabel || 'place',
       groupLabel: loader.options.groupLabel || undefined,
+      inLabel: loader.options.inLabel || undefined,
+      outLabel: loader.options.outLabel || undefined,
       fileName: loader.fileName,
       dateMode: loader.options.dateMode,
       dateStart: loader.options.dateStart,
@@ -5868,6 +7846,7 @@ function buildFromLoader() {
       mapping: loader.mapping,
       boundaries: loader.boundaries,
       options: opts,
+      theme: loader.theme,
     });
     loadSource(source);
     setBlend(0);
@@ -5901,6 +7880,11 @@ $('#fileTable').addEventListener(
 $('#fileBounds').addEventListener(
   'change',
   ev => ev.target.files[0] && takeBoundary(ev.target.files[0]),
+);
+$('#bPickTheme').addEventListener('click', () => $('#fileTheme').click());
+$('#fileTheme').addEventListener(
+  'change',
+  ev => ev.target.files[0] && takeTheme(ev.target.files[0]),
 );
 $('#bBuild').addEventListener('click', buildFromLoader);
 $('#bTemplate').addEventListener('click', () =>
@@ -5956,7 +7940,7 @@ $('#exportPop').addEventListener('click', async ev => {
   try {
     await runExport(btn.dataset.export);
   } catch (e) {
-    feedback('Export failed: ' + e.message, true);
+    feedback(t('exportFailed') + e.message, true);
   }
 });
 addEventListener('keydown', ev => {
@@ -5965,6 +7949,1647 @@ addEventListener('keydown', ev => {
     $('#exportPop').hidden = true;
   }
 });
+
+/* ====================================================================
+   Language, filters, period range, route limit, analysis panels, area-value
+   (thematic) layer and notes. Everything here reads the same dataset as the
+   rest of the page; the toolbox fills `meta.lang`, `theme`, `meta.notes`.
+   ==================================================================== */
+
+/* ---------------------------------------------------------- translations */
+const FRTXT = {
+  Layout: 'Disposition',
+  Geo: 'Géo',
+  Dark: 'Sombre',
+  Light: 'Clair',
+  Terrain: 'Relief',
+  Satellite: 'Satellite',
+  None: 'Aucun',
+  Limits: 'Limites',
+  'Zoom in': 'Zoom avant',
+  'Zoom out': 'Zoom arrière',
+  Zoom: 'Zoom',
+  'Background map': 'Fond de carte',
+  'Centre the map on the data': 'Centrer la carte sur les données',
+  'Fit data': 'Cadrer les données',
+  'Load data…': 'Charger des données…',
+  Flows: 'Flux',
+  Filters: 'Filtres',
+  Period: 'Période',
+  Legend: 'Légende',
+  'Previous period': 'Période précédente',
+  'Next period': 'Période suivante',
+  'Map layers': 'Couches de la carte',
+  'Light / dark': 'Clair / sombre',
+  'Strongest routes only; the analysis covers every route.':
+    'Les plus fortes seulement ; l’analyse couvre toutes les routes.',
+  'Route: weak → strong (arrow = direction)': 'Route : faible → fort (flèche = sens)',
+  Periods: 'Périodes',
+  'Export ▾': 'Exporter ▾',
+  'Map of places linked by flows. A table view with the busiest places is below the chart.':
+    'Carte des lieux reliés par des flux. Un tableau des lieux les plus actifs se trouve sous la carte.',
+  'More in than out': 'Plus d’entrées que de sorties',
+  'More out than in': 'Plus de sorties que d’entrées',
+  'Roughly balanced': 'À peu près équilibré',
+  'Ring: movement inside the place itself': 'Anneau : mouvements à l’intérieur du lieu',
+  'Between groups': 'Entre groupes',
+  'Within one group': 'Au sein d’un même groupe',
+  'Level 1 limit': 'Limite niveau 1',
+  'Level 2 limit': 'Limite niveau 2',
+  'Table view: the busiest places for the chosen date':
+    'Tableau : les lieux les plus actifs pour la période choisie',
+  'Built from a table.': 'Construit à partir d’une table.',
+  'Map (PDF, A4)': 'Carte (PDF, A4)',
+  'Printable map: title, scale, legend, source; portrait or landscape to suit the data.':
+    'Carte imprimable : titre, échelle, légende, source ; portrait ou paysage selon les données.',
+  'Animation (GIF)': 'Animation (GIF)',
+  'Animated GIF of the whole period, no basemap if tiles block read-back.':
+    'GIF animé de toute la période (sans fond de carte si les tuiles bloquent la lecture).',
+  'Animation (video)': 'Animation (vidéo)',
+  'Records the timeline as a WebM video.': 'Enregistre la chronologie en vidéo WebM.',
+  'Data (JSON)': 'Données (JSON)',
+  'The current day: places, flows and totals.': 'La période affichée : lieux, flux et totaux.',
+  'Map (GeoJSON)': 'Carte (GeoJSON)',
+  'Points, flows and outlines — opens in QGIS, ArcGIS, geojson.io.':
+    'Points, flux et contours — s’ouvre dans QGIS, ArcGIS, geojson.io.',
+  'Map (GeoParquet)': 'Carte (GeoParquet)',
+  'One table with WKB geometry, for geopandas, DuckDB, BigQuery.':
+    'Une table avec géométrie WKB, pour geopandas, DuckDB, BigQuery.',
+  'Map (Shapefile)': 'Carte (Shapefile)',
+  'ZIP of places.shp, flows.shp, areas.shp with .prj, .shx and .dbf.':
+    'ZIP de places.shp, flows.shp, areas.shp avec .prj, .shx et .dbf.',
+  'Data (CSV)': 'Données (CSV)',
+  'Two tables, places and flows, for the current day.':
+    'Deux tables, lieux et flux, pour la période affichée.',
+  'Page (self-contained)': 'Page (autonome)',
+  'Embed (Experience Builder)…': 'Intégrer (Experience Builder)…',
+  'Link, iframe code or single-file code to embed this page in ArcGIS Experience Builder.':
+    'Lien, code iframe ou code en un fichier pour intégrer cette page dans ArcGIS Experience Builder.',
+  'This whole app with your data inside, as one file to hand over.':
+    'Toute l’application avec vos données, en un seul fichier à transmettre.',
+  'Load your own table': 'Charger votre propre table',
+  'One row per flow. The columns below are detected from the header row — adjust anything that looks wrong. Nothing leaves your browser.':
+    'Une ligne par flux. Les colonnes ci-dessous sont détectées à partir de la ligne d’en-tête : corrigez ce qui paraît faux. Rien ne quitte votre navigateur.',
+  'Choose a table…': 'Choisir une table…',
+  'CSV, TSV or JSON — or drop the file here': 'CSV, TSV ou JSON — ou déposez le fichier ici',
+  'Add boundaries… (optional)': 'Ajouter des limites… (facultatif)',
+  'GeoJSON areas: gives map outlines and lets places be found by name':
+    'Zones GeoJSON : donnent les contours de la carte et permettent de localiser les lieux par leur nom',
+  'Template CSV': 'Modèle CSV',
+  'Back to the example': 'Retour à l’exemple',
+  Cancel: 'Annuler',
+  'Build the map': 'Construire la carte',
+  Columns: 'Colonnes',
+  'Labels and dates': 'Libellés et dates',
+  Title: 'Titre',
+  'Unit, plural': 'Unité (pluriel)',
+  'Call each row a': 'Appeler chaque ligne un',
+  'Grouping column name': 'Nom de la colonne de regroupement',
+  'Dates are': 'Les dates sont',
+  'First date': 'Première date',
+  'detected automatically': 'détectées automatiquement',
+  'calendar dates': 'dates calendaires',
+  'day numbers': 'numéros de jour',
+  'not used': 'non utilisées',
+  '(required)': '(obligatoire)',
+  'Origin name': 'Nom de l’origine',
+  'Origin group (optional)': 'Groupe d’origine (facultatif)',
+  'Origin longitude': 'Longitude de l’origine',
+  'Origin latitude': 'Latitude de l’origine',
+  'Destination name': 'Nom de la destination',
+  'Destination group (optional)': 'Groupe de destination (facultatif)',
+  'Destination longitude': 'Longitude de la destination',
+  'Destination latitude': 'Latitude de la destination',
+  'Date or day (optional)': 'Date ou jour (facultatif)',
+  Value: 'Valeur',
+  Remove: 'Retirer',
+  'Name property': 'Propriété du nom',
+  'Choose a table first.': 'Choisissez d’abord une table.',
+};
+const FRX = [
+  [
+    /^(\S+) rows × (\d+) columns · read as (.+)$/,
+    m => m[1] + ' lignes × ' + m[2] + ' colonnes · lu comme ' + m[3],
+  ],
+  [/^(.+) — ([\d,.\s]+) rows$/, m => m[1] + ' — ' + m[2] + ' lignes'],
+  [/^Two layers loaded$/, () => 'Deux couches chargées'],
+  [/^Add one more layer for finer areas$/, () => 'Ajoutez une couche pour des zones plus fines'],
+];
+const TXORIG = new WeakMap();
+function frOf(text) {
+  if (FRTXT[text] !== undefined) return FRTXT[text];
+  for (const [re, fn] of FRX) {
+    const m = re.exec(text);
+    if (m) return fn(m);
+  }
+  return undefined;
+}
+/** Translate the static text under `root` (and flip it back for English). */
+function tx(root) {
+  if (!root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let nd;
+  while ((nd = walker.nextNode())) nodes.push(nd);
+  for (const n of nodes) {
+    const p = n.parentNode;
+    if (!p || /^(SCRIPT|STYLE)$/.test(p.tagName)) continue;
+    const orig = TXORIG.has(n) ? TXORIG.get(n) : n.nodeValue;
+    const trimmed = orig.replace(/\s+/g, ' ').trim();
+    if (!trimmed) continue;
+    const fr = frOf(trimmed);
+    if (fr === undefined) continue;
+    if (!TXORIG.has(n)) TXORIG.set(n, orig);
+    const lead = /^\s*/.exec(orig)[0],
+      trail = /\s*$/.exec(orig)[0];
+    const next = lead + (LANG === 'fr' ? fr : trimmed) + trail;
+    if (n.nodeValue !== next) n.nodeValue = next;
+  }
+  const els = root.querySelectorAll
+    ? root.querySelectorAll('[title],[aria-label],[placeholder]')
+    : [];
+  for (const el of els) {
+    for (const attr of ['title', 'aria-label', 'placeholder']) {
+      if (!el.hasAttribute(attr)) continue;
+      const key = 'data-en-' + attr;
+      if (!el.hasAttribute(key)) {
+        if (frOf(el.getAttribute(attr)) === undefined) continue;
+        el.setAttribute(key, el.getAttribute(attr));
+      }
+      const en = el.getAttribute(key);
+      const fr = frOf(en);
+      el.setAttribute(attr, LANG === 'fr' && fr !== undefined ? fr : en);
+    }
+  }
+}
+
+/* messages produced by the page itself: [English, French], or a function */
+const I = {
+  lang: ['FR', 'EN'],
+  unitDefault: ['records', 'enregistrements'],
+  nodeDefault: ['place', 'lieu'],
+  groupDefault: ['group', 'groupe'],
+  day: [d => 'Day ' + d, d => 'Jour ' + d],
+  step: [d => 'Step ' + d, d => 'Étape ' + d],
+  play: ['Play', 'Lecture'],
+  pause: ['Pause', 'Pause'],
+  upTo: ['Up to', 'Jusqu’au'],
+  from: ['From', 'Du'],
+  geo: ['Geo', 'Géo'],
+  network: ['Network', 'Réseau'],
+  limitsOff: ['Limits: off', 'Limites : aucune'],
+  limitsL1: ['Limits: level 1', 'Limites : niveau 1'],
+  limitsL2: ['Limits: level 2', 'Limites : niveau 2'],
+  routes: ['routes', 'routes'],
+  subDots: [
+    (node, inside) =>
+      inside
+        ? 'Each dot is one ' + node + '; the records counted inside it travel round its ring.'
+        : 'Each dot is one ' + node + ', each line a flow between two of them.',
+    (node, inside) =>
+      inside
+        ? 'Chaque point est un lieu (' +
+          node +
+          ') ; les enregistrements comptés à l’intérieur tournent autour de son anneau.'
+        : 'Chaque point représente : ' +
+          node +
+          '. Chaque ligne est un flux entre deux d’entre eux.',
+  ],
+  subTail: [
+    ' Drag the layout slider to move between true geography and a network view.',
+    ' Le curseur « Disposition » passe de la géographie réelle à une vue en réseau.',
+  ],
+  thArrived: ['Arrived', 'Arrivés'],
+  thLeft: ['Left', 'Partis'],
+  thInside: ['Inside', 'Sur place'],
+  thNet: ['Net', 'Solde'],
+  tipNode: [
+    n =>
+      '<b>' +
+      esc(n.name) +
+      '</b>' +
+      (n.gov ? ' · ' + esc(n.gov) : '') +
+      '\n' +
+      fmt(n.inn) +
+      ' ' +
+      wArr() +
+      ' · ' +
+      fmt(n.out) +
+      ' ' +
+      wLeft() +
+      '\n' +
+      fmt(n.within) +
+      ' moved inside\nnet ' +
+      (n.net > 0 ? '+' : '') +
+      fmt(n.net),
+    n =>
+      '<b>' +
+      esc(n.name) +
+      '</b>' +
+      (n.gov ? ' · ' + esc(n.gov) : '') +
+      '\n' +
+      fmt(n.inn) +
+      ' ' +
+      wArr() +
+      ' · ' +
+      fmt(n.out) +
+      ' ' +
+      wLeft() +
+      '\n' +
+      fmt(n.within) +
+      ' sur place\nsolde ' +
+      (n.net > 0 ? '+' : '') +
+      fmt(n.net),
+  ],
+  tipTheme: [
+    (a, th) =>
+      '<b>' +
+      esc(a.n) +
+      '</b>' +
+      (a.g ? ' · ' + esc(a.g) : '') +
+      '\n' +
+      fmt(a.v) +
+      ' ' +
+      esc(th.label),
+    (a, th) =>
+      '<b>' +
+      esc(a.n) +
+      '</b>' +
+      (a.g ? ' · ' + esc(a.g) : '') +
+      '\n' +
+      fmt(a.v) +
+      ' ' +
+      esc(th.label),
+  ],
+  statsLine: [
+    (v, unit, nodes, links) =>
+      '<b>' +
+      fmt(v) +
+      '</b> ' +
+      unit +
+      ' · <b>' +
+      fmt(nodes.n) +
+      '</b> ' +
+      nodes.word +
+      ' · <b>' +
+      fmt(links) +
+      '</b> routes',
+    (v, unit, nodes, links) =>
+      '<b>' +
+      fmt(v) +
+      '</b> ' +
+      unit +
+      ' · <b>' +
+      fmt(nodes.n) +
+      '</b> ' +
+      nodes.word +
+      ' · <b>' +
+      fmt(links) +
+      '</b> routes',
+  ],
+  netLayout: [
+    'Network layout — distance has no geographic meaning',
+    'Disposition en réseau — la distance n’a pas de sens géographique',
+  ],
+  netNotScale: ['Network layout - not to scale', 'Disposition en réseau - sans échelle'],
+  bmNetwork: [
+    'Network layout — the map is hidden. Drag the layout slider back towards Geo to see it again.',
+    'Disposition en réseau — la carte est masquée. Ramenez le curseur « Disposition » vers Géo pour la revoir.',
+  ],
+  bmLoadedLimits: [' Loaded limits: ', ' Limites chargées : '],
+  bmNone: [
+    limits =>
+      'No background map — places sit on their true coordinates' +
+      (limits ? ', with the administrative limits drawn.' : '.'),
+    limits =>
+      'Pas de fond de carte — les lieux sont placés sur leurs coordonnées réelles' +
+      (limits ? ', avec les limites administratives.' : '.'),
+  ],
+  bmNoProv: [
+    'No background map available — places are still placed on their true coordinates. ',
+    'Aucun fond de carte disponible — les lieux restent placés sur leurs coordonnées réelles. ',
+  ],
+  bmBackground: ['Background: ', 'Fond de carte : '],
+  bmPublic: [
+    ' — public tiles, no API key, no sign-up.',
+    ' — tuiles publiques, sans clé API ni inscription.',
+  ],
+  bmLoops: [
+    'Every flow in this table starts and ends at the same place: the two ends share one coordinate pair, so the records are counted inside each place. Give each end its own coordinates to draw movement between places.',
+    'Tous les flux de cette table partent et arrivent au même endroit : les deux extrémités partagent la même paire de coordonnées, les enregistrements sont donc comptés à l’intérieur de chaque lieu. Donnez à chaque extrémité ses propres coordonnées pour dessiner un mouvement entre lieux.',
+  ],
+  provSwitched: [
+    (a, b) => a + ' would not serve tiles — switched to ' + b,
+    (a, b) => a + ' ne fournit pas les tuiles — bascule vers ' + b,
+  ],
+  provNone: [
+    a => a + ' would not serve tiles — showing boundaries only',
+    a => a + ' ne fournit pas les tuiles — seules les limites sont affichées',
+  ],
+  exportedFrames: [n => 'Exported ' + n + ' frames.', n => n + ' images exportées.'],
+  gifNoBase: [
+    n =>
+      'Exported ' +
+      n +
+      ' frames. This map server does not allow reading its tiles, so the GIF has no background map.',
+    n =>
+      n +
+      ' images exportées. Ce serveur de cartes n’autorise pas la lecture de ses tuiles : le GIF n’a pas de fond de carte.',
+  ],
+  recording: ['Recording the timeline…', 'Enregistrement de la chronologie…'],
+  recorded: ['Recorded.', 'Enregistré.'],
+  savedPage: [
+    'Saved the page with this dataset inside — one file, works offline.',
+    'Page enregistrée avec ces données : un seul fichier, fonctionne hors ligne.',
+  ],
+  pdfPrep: ['Preparing the PDF…', 'Préparation du PDF…'],
+  pdfDone: [
+    (portrait, tainted) =>
+      'PDF written (A4 ' +
+      (portrait ? 'portrait' : 'landscape') +
+      ').' +
+      (tainted
+        ? ' This map server does not allow reading its tiles, so the PDF has no background map.'
+        : ''),
+    (portrait, tainted) =>
+      'PDF créé (A4 ' +
+      (portrait ? 'portrait' : 'paysage') +
+      ').' +
+      (tainted
+        ? ' Ce serveur de cartes n’autorise pas la lecture de ses tuiles : le PDF n’a pas de fond de carte.'
+        : ''),
+  ],
+  exportFailed: ['Export failed: ', 'Échec de l’export : '],
+  pdfSource: ['Source: ', 'Source : '],
+  pdfAdmin: ['Administrative limits', 'Limites administratives'],
+  pdfNote: [
+    (unit, node, total) =>
+      'Dot size: ' +
+      unit +
+      ' moved into, out of or within one ' +
+      node +
+      '. Line thickness: value of the route. Total: ' +
+      total +
+      ' ' +
+      unit +
+      '.',
+    (unit, node, total) =>
+      'Taille des points : ' +
+      unit +
+      ' arrivés, partis ou déplacés dans un même lieu (' +
+      node +
+      '). Épaisseur des lignes : valeur de la route. Total : ' +
+      total +
+      ' ' +
+      unit +
+      '.',
+  ],
+  // dashboard
+  kFlows: ['flows between places', 'flux entre lieux'],
+  kRoutes: ['routes', 'routes'],
+  kArrived: ['arrived', 'arrivés'],
+  kActive: ['active places', 'lieux actifs'],
+  kOutside: [g => 'outside their ' + g, g => 'hors de leur ' + g],
+  filters: ['Filter', 'Filtrer'],
+  filtersH: ['Filters', 'Filtres'],
+  flowsBtn: ['Flows', 'Flux'],
+  pAllBtn: ['All', 'Tous'],
+  pFirst: ['First', 'Premier'],
+  pLast: ['Last', 'Dernier'],
+  pWhole: ['Whole period', 'Toute la période'],
+  ptot: [
+    (all, unit, flt, active) =>
+      all + ' ' + unit + ' in the period' + (active ? ' · ' + flt + ' in the filter' : ''),
+    (all, unit, flt, active) =>
+      all + ' ' + unit + ' sur la période' + (active ? ' · ' + flt + ' dans le filtre' : ''),
+  ],
+  allGroups: [g => 'All ' + plural(g), g => 'Tous les ' + plural(g)],
+  allPlaces: [n => 'All ' + plural(n), n => 'Tous les ' + plural(n)],
+  clear: ['Clear filters', 'Effacer les filtres'],
+  routesShown: ['Routes shown', 'Routes affichées'],
+  theme: ['Layer', 'Couche'],
+  notes: ['ⓘ Notes', 'ⓘ Notes'],
+  notesTitle: ['Notes and sources', 'Notes et sources'],
+  close: ['Close ✕', 'Fermer ✕'],
+  hTopRoutes: ['Main routes', 'Routes principales'],
+  hTopDest: ['Main destinations', 'Destinations principales'],
+  hGroups: [
+    (g, th) => 'Receiving ' + plural(g) + (th ? ' · ' + th : ''),
+    (g, th) =>
+      plural(g).charAt(0).toUpperCase() +
+      plural(g).slice(1) +
+      ' d’arrivée' +
+      (th ? ' · ' + th : ''),
+  ],
+  hNet: ['Net balance by place (in − out)', 'Solde net par lieu (entrées − sorties)'],
+  hNetC: [
+    (i, o) => 'Balance by place (' + i + ' − ' + o + ')',
+    (i, o) => 'Solde par lieu (' + i + ' − ' + o + ')',
+  ],
+  hTopDestC: [i => 'Main destinations · ' + i, i => 'Destinations principales · ' + i],
+  hTopRoutesC: [o => 'Main routes · ' + o, o => 'Routes principales · ' + o],
+  hGroupsC: [(g, i) => cap(plural(g)) + ' · ' + i, (g, i) => cap(plural(g)) + ' · ' + i],
+  noGroups: [
+    'No ' +
+      'group: the places belong to no region. Load boundaries (level 1) or give a group column.',
+    'Aucun groupe : les lieux n’appartiennent à aucune région. Chargez des limites (niveau 1) ou indiquez une colonne de groupe.',
+  ],
+  hThemeGrp: [g => 'By ' + g, g => 'Par ' + g],
+  tsTotal: ['Total', 'Total'],
+  tsAreas: ['areas with a value', 'zones avec une valeur'],
+  tsMax: ['highest', 'maximum'],
+  tsShare: [
+    (n, p) => 'The ' + n + ' main areas hold ' + p + ' % of the total.',
+    (n, p) => 'Les ' + n + ' zones principales concentrent ' + p + ' % du total.',
+  ],
+  cumul: ['Cumulative', 'Cumulatif'],
+  flowCol: ['Flow colour', 'Couleur des flux'],
+  noData: ['No data', 'Aucune donnée'],
+  insightTheme: [
+    (pct, g, label, list, more) =>
+      '<b>' +
+      pct +
+      ' %</b> of the flows that leave their ' +
+      g +
+      ' arrive in ' +
+      plural(g) +
+      ' concerned by “' +
+      esc(label) +
+      '” (' +
+      esc(list) +
+      (more ? '…' : '') +
+      ').',
+    (pct, g, label, list, more) =>
+      '<b>' +
+      pct +
+      ' %</b> des flux qui quittent leur ' +
+      g +
+      ' d’origine arrivent dans des ' +
+      plural(g) +
+      ' concernés par « ' +
+      esc(label) +
+      ' » (' +
+      esc(list) +
+      (more ? '…' : '') +
+      ').',
+  ],
+  insightLeave: [
+    (pct, g) => '<b>' + pct + ' %</b> of the flows leave their ' + g + ' of origin.',
+    (pct, g) => '<b>' + pct + ' %</b> des flux quittent leur ' + g + ' d’origine.',
+  ],
+  insightNone: [
+    'No flow between groups in this selection.',
+    'Aucun flux entre groupes dans cette sélection.',
+  ],
+  periodAll: ['whole period', 'toute la période'],
+  // notes
+  nDots: [
+    (node, unit) =>
+      'Dot size shows everything that moved into, out of or within one ' +
+      node +
+      ' — in ' +
+      unit +
+      '. Line thickness shows the value carried on that route; the arrow shows the direction. Hover a dot to see only its routes; click it to filter on it.',
+    (node, unit) =>
+      'La taille d’un point montre tout ce qui est entré, sorti ou resté dans un lieu (' +
+      node +
+      ') — en ' +
+      unit +
+      '. L’épaisseur d’une ligne montre la valeur de la route ; la flèche indique le sens. Survolez un point pour ne voir que ses routes ; cliquez dessus pour filtrer.',
+  ],
+  nLayout: [
+    'The Layout slider moves between true geography and a network layout: in the network, places that exchange many flows sit close together, so distance has no geographic meaning.',
+    'Le curseur « Disposition » passe de la géographie réelle à une disposition en réseau : dans le réseau, les lieux qui échangent beaucoup de flux sont proches, la distance n’a donc plus de sens géographique.',
+  ],
+  nNav: [
+    'Zoom with the wheel, the + / − buttons or a double-click; drag the map to move it; “Fit data” centres it on the data. “Up to” and “From” choose the period; the filters keep one group or one place; “Routes shown” keeps the strongest routes.',
+    'Zoomez avec la molette, les boutons + / − ou un double-clic ; faites glisser la carte pour la déplacer ; « Cadrer les données » la recentre. « Du » et « Jusqu’au » choisissent la période ; les filtres gardent un groupe ou un lieu ; « Routes affichées » garde les plus fortes routes.',
+  ],
+  nTiles: [
+    'Background maps are public tile servers that need no API key: Esri, OpenTopoMap, Wikimedia Maps, OpenStreetMap. If a server refuses the tiles, the map switches to the next one. Choose None to draw only your data and boundaries.',
+    'Les fonds de carte sont des serveurs de tuiles publics, sans clé API : Esri, OpenTopoMap, Wikimedia Maps, OpenStreetMap. Si un serveur refuse les tuiles, la carte passe au suivant. Choisissez « Aucun » pour ne dessiner que vos données et limites.',
+  ],
+  nSource: [s => 'Source: ' + s + '.', s => 'Source : ' + s + '.'],
+  nBuilt: [a => 'Built with ' + a + '.', a => 'Construit avec ' + a + '.'],
+  nBounds: [
+    'Administrative limits: geoBoundaries (CC BY 4.0).',
+    'Limites administratives : geoBoundaries (CC BY 4.0).',
+  ],
+  nTheme: [
+    (label, src) => 'Area layer: ' + label + (src ? ' — ' + src : '') + '.',
+    (label, src) => 'Couche par zone : ' + label + (src ? ' — ' + src : '') + '.',
+  ],
+  nThemeTable: [label => 'Values by area: ' + label, label => 'Valeurs par zone : ' + label],
+  thArea: ['Area', 'Zone'],
+  thGroup: ['Group', 'Groupe'],
+  thValue: ['Value', 'Valeur'],
+  nLoad: [
+    'Any table works. Press Load data… and drop a CSV, TSV or JSON file with one row per flow. Nothing is uploaded: the file is read in the browser and stays there. Export writes the page, the data, the map (PDF), the animation (GIF, video) and GIS files (GeoJSON, GeoParquet, Shapefile).',
+    'Toute table convient. Appuyez sur « Charger des données… » et déposez un CSV, TSV ou JSON avec une ligne par flux. Rien n’est envoyé : le fichier est lu dans le navigateur. « Exporter » produit la page, les données, la carte (PDF), l’animation (GIF, vidéo) et des fichiers SIG (GeoJSON, GeoParquet, Shapefile).',
+  ],
+};
+function t(key, ...args) {
+  const entry = I[key];
+  if (!entry) return key;
+  const v = entry[LANG === 'fr' ? 1 : 0];
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+/* ------------------------------------------------------------ view state */
+let FILT = { fg: '', fd: -1 };
+let SHOW_FLOWS = true;
+let MODE = 'light';
+let FROM = 0;
+let TOPN = null; // null = every route
+let allLinks = [];
+let TH = null; // prepared area-value layer
+let THEMEPATH = [];
+let THEME_ON = false;
+let hoverTheme = null;
+let LASTDRAG = false;
+
+function setLang(l) {
+  LANG = l === 'fr' ? 'fr' : 'en';
+  document.documentElement.lang = LANG;
+  try {
+    localStorage.setItem('flowmap-lang', LANG);
+  } catch (e) {}
+  tx(document.body);
+  refreshTexts();
+}
+function refreshTexts() {
+  if (typeof D === 'undefined' || !D) return;
+  applyMeta();
+  setLimit(limitMode);
+  setBlend(blend, false);
+  $('#bPlay').textContent = playing ? t('pause') : t('play');
+  $('#bLang').textContent = t('lang');
+  $('#lblFrom').textContent = t('from');
+  $('#lblUpTo').textContent = t('upTo');
+  $('#lblFilter').textContent = t('filtersH');
+  $('#lblGrp').textContent = cap(LBL.group);
+  $('#lblNode').textContent = cap(LBL.node);
+  $('#bFlows').textContent = t('flowsBtn');
+  $('#bAll').textContent = t('pAllBtn');
+  $('#bFirst').textContent = t('pFirst');
+  $('#bLast').textContent = t('pLast');
+  $('#lblTopN').textContent = t('routesShown');
+  $('#lblCum').textContent = t('cumul');
+  $('#lblFlowCol').textContent = t('flowCol');
+  $('#bClr').textContent = t('clear');
+  $('#bNotes').textContent = t('notes');
+  $('#notesTitle').textContent = t('notesTitle');
+  $('#bNotesClose').textContent = t('close');
+  fillFilters();
+  renderTheme();
+  renderNotes();
+  updateStatus();
+  rebuild();
+  if (RM) draw(0);
+}
+
+/* ------------------------------------------------------------ theme layer */
+const THEME_COLORS = ['#fde0d6', '#f9b9a4', '#ef8466', '#d9503a', '#a9262a', '#5e0a12'];
+function niceDown(q) {
+  if (!(q > 0)) return 0;
+  const p = Math.pow(10, Math.floor(Math.log10(q)) - 1);
+  return Math.floor(q / p + 1e-9) * p;
+}
+function prepareTheme(theme) {
+  if (!theme || !Array.isArray(theme.areas) || !theme.areas.length) return null;
+  const areas = theme.areas
+    .map(a => ({ n: String(a.n), g: a.g || '', v: +a.v || 0, p: a.p || [] }))
+    .filter(a => a.p.length);
+  const vals = areas
+    .map(a => a.v)
+    .filter(v => v > 0)
+    .sort((a, b) => a - b);
+  let thr = [];
+  if (Array.isArray(theme.breaks) && theme.breaks.length >= 2) thr = theme.breaks.map(Number);
+  else if (vals.length) {
+    const k = Math.min(6, Math.max(2, Math.ceil(Math.log2(vals.length + 1))));
+    for (let i = 0; i < k; i++) {
+      const q = niceDown(vals[Math.min(vals.length - 1, Math.floor((i * vals.length) / k))]);
+      if (i === 0 || q > thr[thr.length - 1]) thr.push(q);
+    }
+    thr[0] = Math.min(thr[0], niceDown(vals[0]) || vals[0]);
+  }
+  const n = thr.length;
+  const col = thr.map((_, i) => THEME_COLORS[n === 1 ? 3 : Math.round((i * 5) / (n - 1))]);
+  const intLike = thr.every(x => Number.isInteger(x));
+  const f = x => (Number.isInteger(x) ? fmt(x) : String(+x.toPrecision(3)));
+  const lab = thr.map((x, i) =>
+    i === n - 1
+      ? f(x) + '+'
+      : intLike
+        ? thr[i + 1] - 1 > x
+          ? f(x) + '–' + f(thr[i + 1] - 1)
+          : f(x)
+        : f(x) + '–<' + f(thr[i + 1]),
+  );
+  for (const a of areas) {
+    a.k = -1;
+    if (a.v > 0) for (let i = 0; i < n; i++) if (a.v >= thr[i]) a.k = i;
+  }
+  const byGroup = {};
+  for (const a of areas) if (a.g) byGroup[a.g] = (byGroup[a.g] || 0) + a.v;
+  return {
+    label: theme.label || 'Value',
+    source: theme.source || '',
+    areas,
+    thr,
+    col,
+    lab,
+    byGroup,
+    hasGroups: Object.keys(byGroup).length > 0,
+    total: areas.reduce((s, a) => s + a.v, 0),
+  };
+}
+function buildThemePaths() {
+  THEMEPATH = [];
+  if (!TH) return;
+  const z = MAP.z,
+    k = MAP.s;
+  for (const a of TH.areas) {
+    THEMEPATH.push(
+      a.p.map(flat => {
+        const pts = [];
+        for (let i = 0; i < flat.length; i += 2)
+          pts.push([
+            MAP.ox + (mercX(flat[i], z) - MAP.minX) * k,
+            MAP.oy + (mercY(flat[i + 1], z) - MAP.minY) * k,
+          ]);
+        return pts;
+      }),
+    );
+  }
+}
+function drawTheme(alpha) {
+  if (!TH || !THEME_ON || alpha <= 0.02) return;
+  for (let i = 0; i < TH.areas.length; i++) {
+    const a = TH.areas[i];
+    const on = a === hoverTheme;
+    if (a.k < 0 && !on) continue;
+    ctx.beginPath();
+    for (const pts of THEMEPATH[i] || []) {
+      for (let j = 0; j < pts.length; j++) {
+        if (j === 0) ctx.moveTo(pts[j][0], pts[j][1]);
+        else ctx.lineTo(pts[j][0], pts[j][1]);
+      }
+      ctx.closePath();
+    }
+    if (a.k >= 0) {
+      ctx.globalAlpha = (on ? 0.85 : 0.62) * alpha;
+      ctx.fillStyle = TH.col[a.k];
+      ctx.fill('evenodd');
+    }
+    ctx.globalAlpha = (on ? 1 : 0.55) * alpha;
+    ctx.strokeStyle = on ? '#ffffff' : '#7a1018';
+    ctx.lineWidth = on ? 1.6 : 0.5;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+function themeAt(x, y) {
+  if (!TH || !THEME_ON || blend > 0.6) return null;
+  for (let i = TH.areas.length - 1; i >= 0; i--) {
+    const rings = THEMEPATH[i];
+    if (rings && pointInRingsLL(x, y, rings)) return TH.areas[i];
+  }
+  return null;
+}
+function renderTheme() {
+  const btn = $('#bTheme'),
+    key = $('#lgTheme');
+  if (!TH) {
+    btn.hidden = true;
+    key.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  btn.textContent = TH.label;
+  btn.setAttribute('aria-pressed', THEME_ON ? 'true' : 'false');
+  key.hidden = !THEME_ON;
+  key.innerHTML =
+    '<b>' +
+    esc(TH.label) +
+    '</b><div class="tkrow">' +
+    TH.col
+      .map(
+        (c, i) =>
+          '<span class="tk"><i style="background:' + c + '"></i>' + esc(TH.lab[i]) + '</span>',
+      )
+      .join('') +
+    '</div>';
+}
+
+function renderThemeSummary() {
+  const card = $('#cThemeSum');
+  if (!card) return;
+  if (!TH) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $('#hThemeSum').textContent = TH.label;
+  const withVal = TH.areas.filter(a => a.v > 0);
+  const top = TH.areas.slice().sort((a, b) => b.v - a.v);
+  $('#themeKpis').innerHTML = [
+    [fmt(TH.total), t('tsTotal')],
+    [withVal.length + ' / ' + TH.areas.length, t('tsAreas')],
+    [fmt(top[0] ? top[0].v : 0), t('tsMax') + (top[0] ? ' · ' + top[0].n : '')],
+  ]
+    .map(([v, l]) => '<div><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>')
+    .join('');
+  $('#listTheme').innerHTML = barRows(
+    top.slice(0, 8).map(a => [esc(a.n) + (a.g ? ' <small>' + esc(a.g) + '</small>' : ''), a.v, -1]),
+  );
+  const n5 = Math.min(5, top.length);
+  const share = TH.total
+    ? Math.round((top.slice(0, n5).reduce((s, a) => s + a.v, 0) / TH.total) * 100)
+    : 0;
+  $('#themeShare').textContent = top.length > n5 ? t('tsShare', n5, share) : '';
+  const groups = Object.entries(TH.byGroup || {}).sort((a, b) => b[1] - a[1]);
+  $('#hThemeGrp').hidden = $('#listThemeGrp').hidden = groups.length < 2;
+  if (groups.length >= 2) {
+    $('#hThemeGrp').textContent = t('hThemeGrp', LBL.group);
+    $('#listThemeGrp').innerHTML = barRows(groups.slice(0, 6).map(([g, v]) => [esc(g), v, -1]));
+  }
+}
+
+/* --------------------------------------------------------------- filters */
+function fillFilters() {
+  const groups = [...new Set(N.map(n => n.gov).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const gsel = $('#selGrp'),
+    nsel = $('#selNode');
+  gsel.hidden = groups.length < 2;
+  gsel.innerHTML =
+    '<option value="">' +
+    esc(t('allGroups', LBL.group)) +
+    '</option>' +
+    groups.map(g => '<option value="' + esc(g) + '">' + esc(g) + '</option>').join('');
+  gsel.value = FILT.fg;
+  const list = N.filter(n => !FILT.fg || n.gov === FILT.fg).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  nsel.innerHTML =
+    '<option value="-1">' +
+    esc(t('allPlaces', LBL.node)) +
+    '</option>' +
+    list
+      .map(
+        n =>
+          '<option value="' +
+          n.i +
+          '">' +
+          esc(n.name) +
+          (!FILT.fg && n.gov && groups.length > 1 ? ' (' + esc(n.gov) + ')' : '') +
+          '</option>',
+      )
+      .join('');
+  nsel.value = String(FILT.fd);
+  $('#bClr').hidden = !(FILT.fg || FILT.fd >= 0);
+}
+function applyFilter() {
+  fillFilters();
+  rebuild();
+  focusSelection();
+  if (blend >= 0.02) configure(0.5);
+  if (RM) draw(0);
+}
+function setGroup(g) {
+  FILT = { fg: g || '', fd: -1 };
+  applyFilter();
+}
+function setNode(i, force) {
+  FILT.fd = FILT.fd === i && !force ? -1 : i;
+  applyFilter();
+}
+function clearFilters() {
+  FILT = { fg: '', fd: -1 };
+  applyFilter();
+}
+function focusSelection() {
+  if (blend >= 0.02) return;
+  let pts = [];
+  if (FILT.fd >= 0) {
+    pts = [N[FILT.fd]];
+    for (const l of allLinks) {
+      if (l.source.i === FILT.fd) pts.push(l.target);
+      else if (l.target.i === FILT.fd) pts.push(l.source);
+    }
+  } else if (FILT.fg) pts = N.filter(n => n.gov === FILT.fg);
+  if (!pts.length) return fitData();
+  let a = Infinity,
+    b = -Infinity,
+    c = Infinity,
+    d = -Infinity;
+  for (const n of pts) {
+    a = Math.min(a, n.lon);
+    b = Math.max(b, n.lon);
+    c = Math.min(c, n.lat);
+    d = Math.max(d, n.lat);
+  }
+  const mx = Math.max((b - a) * 0.12, 0.15),
+    my = Math.max((d - c) * 0.12, 0.15);
+  VIEW = { lon0: a - mx, lon1: b + mx, lat0: c - my, lat1: d + my };
+  refreshView(true);
+}
+
+/* ----------------------------------------------------- analysis panels */
+function barRows(items) {
+  const max = Math.max(...items.map(x => Math.abs(x[1])), 1);
+  return items.length
+    ? items
+        .map(
+          ([lab, v, z, cls, shown]) =>
+            '<li' +
+            (z >= 0 ? ' data-z="' + z + '" class="click"' : '') +
+            '><span class="lb">' +
+            lab +
+            '</span><span class="tr"><i class="' +
+            (cls || '') +
+            '" style="width:' +
+            ((Math.abs(v) / max) * 100).toFixed(1) +
+            '%"></i></span><b>' +
+            (shown !== undefined ? shown : fmt(v)) +
+            '</b></li>',
+        )
+        .join('')
+    : '<li class="muted">' + t('noData') + '</li>';
+}
+function renderDash() {
+  const links = allLinks;
+  const tot = links.reduce((s, l) => s + l.w, 0);
+  const groupsKnown = new Set(N.map(n => n.gov).filter(Boolean)).size > 1;
+  const byDest = new Map(),
+    byGroup = new Map();
+  let leave = 0;
+  const byArr = new Map();
+  for (const l of links) {
+    const val = HAS_IN ? l.wi : l.w;
+    byDest.set(l.target, (byDest.get(l.target) || 0) + val);
+    if (l.target.gov) byArr.set(l.target.gov, (byArr.get(l.target.gov) || 0) + val);
+    if (l.source.gov !== l.target.gov) {
+      leave += l.w;
+      byGroup.set(l.target.gov, (byGroup.get(l.target.gov) || 0) + l.w);
+    }
+  }
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const kp = [
+    [fmt(tot), t('kFlows')],
+    [fmt(links.length), t('kRoutes')],
+    [fmt(act.length), t('kActive')],
+  ];
+  if (qCustom() || HAS_IN) kp[0][1] = qCustom() ? qOut() : kp[0][1];
+  if (HAS_IN) kp.splice(1, 0, [fmt(totalIn), qCustom() ? qIn() : t('kArrived')]);
+  if (groupsKnown) kp.push([pct(leave, tot) + ' %', t('kOutside', LBL.group)]);
+  $('#kpis').innerHTML = kp
+    .map(([v, l]) => '<div><b>' + v + '</b><span>' + esc(l) + '</span></div>')
+    .join('');
+
+  const ins = $('#insight');
+  if (groupsKnown && TH && TH.hasGroups) {
+    const hit = [...byGroup].filter(([g]) => (TH.byGroup[g] || 0) > 0);
+    const exp = hit.reduce((s, x) => s + x[1], 0);
+    ins.hidden = false;
+    ins.innerHTML = leave
+      ? t(
+          'insightTheme',
+          pct(exp, leave),
+          LBL.group,
+          TH.label,
+          hit
+            .slice(0, 4)
+            .map(x => x[0])
+            .join(', '),
+          hit.length > 4,
+        )
+      : t('insightNone');
+  } else if (groupsKnown) {
+    ins.hidden = false;
+    ins.innerHTML = leave ? t('insightLeave', pct(leave, tot), LBL.group) : t('insightNone');
+  } else ins.hidden = true;
+
+  $('#hRoutes').textContent = qCustom() ? t('hTopRoutesC', qOut()) : t('hTopRoutes');
+  $('#hDest').textContent = qCustom() ? t('hTopDestC', qIn()) : t('hTopDest');
+  $('#hGroups').textContent =
+    qCustom() && !TH
+      ? t('hGroupsC', LBL.group, qIn())
+      : t('hGroups', LBL.group, TH ? TH.label : '');
+  $('#hNet').textContent = qCustom() ? t('hNetC', qIn(), qOut()) : t('hNet');
+  renderLabels();
+  renderThemeSummary();
+  $('#listRoutes').innerHTML = barRows(
+    links
+      .slice()
+      .sort((a, b) => b.w - a.w)
+      .slice(0, 5)
+      .map(l => [esc(l.source.name) + ' → ' + esc(l.target.name), l.w, l.source.i]),
+  );
+  $('#listDest').innerHTML = barRows(
+    [...byDest]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([n, w]) => [esc(n.name) + (n.gov ? ' <small>' + esc(n.gov) + '</small>' : ''), w, n.i]),
+  );
+  $('#listGroups').innerHTML = byArr.size
+    ? barRows(
+        [...byArr]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([g, w]) => [
+            esc(g) +
+              (TH && TH.hasGroups
+                ? ' <small class="' +
+                  ((TH.byGroup[g] || 0) > 0 ? 'red' : '') +
+                  '">' +
+                  fmt(TH.byGroup[g] || 0) +
+                  '</small>'
+                : ''),
+            w,
+            -1,
+          ]),
+      )
+    : '<li class="muted">' + t('noGroups') + '</li>';
+  const net = act.filter(n => n.net !== 0).sort((a, b) => b.net - a.net);
+  const pick5 = net.length > 5 ? [...net.slice(0, 3), ...net.slice(-2)] : net;
+  $('#listNet').innerHTML = barRows(
+    pick5.map(n => [
+      esc(n.name),
+      n.net,
+      n.i,
+      n.net > 0 ? '' : 'neg',
+      (n.net > 0 ? '+' : '') + fmt(n.net),
+    ]),
+  );
+}
+
+/* ----------------------------------------------------------------- notes */
+function renderNotes() {
+  const m = (D && D.meta) || {};
+  const unit = LBL.unit,
+    node = LBL.node;
+  const parts = [];
+  if (m.notes) parts.push('<p>' + esc(m.notes) + '</p>');
+  parts.push('<p>' + esc(t('nDots', node, unit)) + '</p>');
+  parts.push('<p>' + esc(t('nLayout')) + '</p>');
+  parts.push('<p>' + esc(t('nNav')) + '</p>');
+  if (TH) parts.push('<p>' + esc(t('nTheme', TH.label, TH.source)) + '</p>');
+  const src = [];
+  if (m.source) src.push(t('nSource', m.source));
+  if (m.boundaries) src.push(t('nBounds'));
+  if (m.app) src.push(t('nBuilt', m.app));
+  if (src.length) parts.push('<p>' + esc(src.join(' ')) + '</p>');
+  parts.push('<p>' + esc(t('nTiles')) + '</p>');
+  parts.push('<p>' + esc(t('nLoad')) + '</p>');
+  if (TH) {
+    const rows = TH.areas
+      .filter(a => a.v > 0)
+      .sort((a, b) => b.v - a.v)
+      .slice(0, 200);
+    parts.push(
+      '<details><summary>' +
+        esc(t('nThemeTable', TH.label)) +
+        '</summary><div class="tw"><table><thead><tr><th>' +
+        esc(t('thArea')) +
+        '</th>' +
+        (TH.hasGroups ? '<th>' + esc(t('thGroup')) + '</th>' : '') +
+        '<th>' +
+        esc(t('thValue')) +
+        '</th></tr></thead><tbody>' +
+        rows
+          .map(
+            a =>
+              '<tr><td>' +
+              esc(a.n) +
+              '</td>' +
+              (TH.hasGroups ? '<td>' + esc(a.g) + '</td>' : '') +
+              '<td>' +
+              fmt(a.v) +
+              '</td></tr>',
+          )
+          .join('') +
+        '<tr><td><b>Total</b></td>' +
+        (TH.hasGroups ? '<td></td>' : '') +
+        '<td><b>' +
+        fmt(TH.total) +
+        '</b></td></tr></tbody></table></div></details>',
+    );
+  }
+  $('#notesBody').innerHTML = parts.join('');
+  $('#noteBox').innerHTML = '';
+}
+
+/* ------------------------------------------------------- periods (bars) */
+let PER = [];
+function dayDate(d) {
+  return new Date(Date.parse(D.meta.dateStart + 'T00:00:00Z') + d * 86400000);
+}
+function buildPeriods() {
+  PER = [];
+  const max = D.maxDay,
+    m = D.meta || {};
+  if (!(max >= 1)) return;
+  const hasDate = Boolean(m.dateStart) && m.dateMode !== 'sequence';
+  if (hasDate) {
+    const span = max + 1;
+    let key, kind;
+    if (span > 62) {
+      kind = 'month';
+      key = d => {
+        const x = dayDate(d);
+        return x.getUTCFullYear() * 12 + x.getUTCMonth();
+      };
+      const n = new Set();
+      for (let d = 0; d <= max; d++) n.add(key(d));
+      if (n.size > 36) {
+        kind = 'year';
+        key = d => dayDate(d).getUTCFullYear();
+      }
+    } else if (span > 21) {
+      kind = 'week';
+      const off = (dayDate(0).getUTCDay() + 6) % 7;
+      key = d => Math.floor((d + off) / 7);
+    } else {
+      kind = 'day';
+      key = d => d;
+    }
+    let cur = null;
+    for (let d = 0; d <= max; d++) {
+      const k = key(d);
+      if (!cur || cur.k !== k) {
+        cur = { k, a: d, b: d, kind };
+        PER.push(cur);
+      } else cur.b = d;
+    }
+  } else {
+    const n = Math.min(12, max + 1),
+      size = (max + 1) / n;
+    for (let i = 0; i < n; i++)
+      PER.push({
+        k: i,
+        a: Math.round(i * size),
+        b: Math.min(max, Math.round((i + 1) * size) - 1),
+        kind: 'step',
+      });
+  }
+  if (PER.length < 2) PER = [];
+}
+function periodText(per, long) {
+  const loc = LANG === 'fr' ? 'fr-FR' : 'en-GB';
+  if (per.kind === 'step') return String(PER.indexOf(per) + 1);
+  const x = dayDate(per.a);
+  if (per.kind === 'month')
+    return x.toLocaleDateString(
+      loc,
+      long
+        ? { month: 'long', year: 'numeric', timeZone: 'UTC' }
+        : { month: 'short', timeZone: 'UTC' },
+    );
+  if (per.kind === 'year') return String(x.getUTCFullYear());
+  if (per.kind === 'week')
+    return long
+      ? x.toLocaleDateString(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' }) +
+          ' – ' +
+          dayDate(per.b).toLocaleDateString(loc, {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC',
+          })
+      : x.toLocaleDateString(loc, { day: 'numeric', month: 'numeric', timeZone: 'UTC' });
+  return long ? dateFmt(x) : String(x.getUTCDate());
+}
+function periodLabel() {
+  if (D.maxDay < 1) return '';
+  const hit = PER.find(p => p.a === FROM && p.b === upTo);
+  if (hit) return periodText(hit, true);
+  if (FROM === 0 && upTo === D.maxDay) return t('pWhole');
+  return FROM > 0 ? fd(FROM) + ' – ' + fd(upTo) : fd(upTo);
+}
+function renderPeriods() {
+  const box = $('#months');
+  let allTot = 0;
+  const sums = PER.map(() => 0);
+  const at = new Int32Array(D.maxDay + 1).fill(-1);
+  PER.forEach((p, i) => {
+    for (let d = p.a; d <= p.b; d++) at[d] = i;
+  });
+  for (const e of E) {
+    const o = e[1],
+      d = e[2];
+    if (e[0] >= FROM && e[0] <= upTo) allTot += e[3];
+    if (FILT.fd >= 0) {
+      if (o !== FILT.fd && d !== FILT.fd) continue;
+    } else if (FILT.fg && N[o].gov !== FILT.fg && N[d].gov !== FILT.fg) continue;
+    const i = at[e[0]];
+    if (i >= 0) sums[i] += e[3];
+  }
+  const filtered = FILT.fd >= 0 || FILT.fg;
+  $('#ptot').textContent = t('ptot', fmt(allTot), LBL.unit, fmt(totalHH), Boolean(filtered));
+  box.hidden = PER.length === 0;
+  if (!PER.length) return;
+  const mx = Math.max(1, ...sums),
+    every = Math.ceil(PER.length / 8);
+  box.innerHTML = PER.map(
+    (p, i) =>
+      '<button type="button" data-i="' +
+      i +
+      '" class="' +
+      (p.a <= upTo && p.b >= FROM ? 'on' : '') +
+      '" title="' +
+      esc(periodText(p, true) + ' : ' + fmt(sums[i])) +
+      '"><i style="height:' +
+      Math.max(3, Math.round((sums[i] / mx) * 58)) +
+      'px"></i><span>' +
+      (i % every === 0 ? esc(periodText(p, false)) : '') +
+      '</span></button>',
+  ).join('');
+}
+function setRange(a, b) {
+  setDay(b);
+  FROM = Math.max(0, Math.min(a, upTo));
+  $('#slFrom').value = FROM;
+  rebuild();
+  if (blend >= 0.02) configure(0.3);
+  if (RM) draw(0);
+}
+function stepPeriod(dir) {
+  if (!PER.length) {
+    setRange(
+      Math.max(0, Math.min(D.maxDay, upTo + dir)),
+      Math.max(0, Math.min(D.maxDay, upTo + dir)),
+    );
+    return;
+  }
+  let i = PER.findIndex(p => p.a <= upTo && p.b >= upTo);
+  if (i < 0) i = 0;
+  i = Math.max(0, Math.min(PER.length - 1, i + dir));
+  setRange(PER[i].a, PER[i].b);
+}
+
+/* ------------------------------------------------- look: flow colour */
+const PALS = {
+  warm: { n: ['Warm', 'Chaud'], l: ['#c9762a', '#ff9f1c'], d: ['#d9a066', '#ffeccb'] },
+  blue: { n: ['Blue', 'Bleu'], l: ['#2f4fa3', '#1b2b6b'], d: ['#6da7ec', '#cfe3ff'] },
+  teal: { n: ['Teal', 'Sarcelle'], l: ['#14877a', '#0b4f47'], d: ['#5cc79a', '#d4ffe8'] },
+  magenta: { n: ['Magenta', 'Magenta'], l: ['#b0307f', '#6e1a50'], d: ['#e07ab8', '#ffd9ee'] },
+  red: { n: ['Red', 'Rouge'], l: ['#c0392b', '#7a1f16'], d: ['#e0707f', '#ffd9de'] },
+  grey: { n: ['Grey', 'Gris'], l: ['#6b7785', '#2d3640'], d: ['#aab6c2', '#eef2f6'] },
+};
+let PAL = 'warm';
+function mixHex(hex, other, k) {
+  const h = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16));
+  const a = h(hex),
+    b = h(other);
+  return (
+    '#' +
+    a
+      .map((v, i) =>
+        Math.round(v * (1 - k) + b[i] * k)
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+  );
+}
+function normPal(v) {
+  v = String(v || '')
+    .trim()
+    .toLowerCase();
+  if (PALS[v]) return v;
+  if (/^[0-9a-f]{6}$/.test(v)) v = '#' + v;
+  return /^#[0-9a-f]{6}$/.test(v) ? v : '';
+}
+function applyPalette() {
+  const dark = MODE === 'dark';
+  let edge, spark;
+  if (PALS[PAL]) [edge, spark] = PALS[PAL][dark ? 'd' : 'l'];
+  else {
+    edge = PAL;
+    spark = mixHex(PAL, dark ? '#ffffff' : '#000000', 0.5);
+  }
+  const st = document.body.style;
+  st.setProperty('--edge', edge);
+  st.setProperty('--spark', spark);
+  st.setProperty('--bar', edge);
+  C.edge = edge;
+  C.spark = spark;
+  document
+    .querySelectorAll('#swatches button')
+    .forEach(b => b.setAttribute('aria-pressed', b.dataset.pal === PAL ? 'true' : 'false'));
+  const pick = $('#palCustom');
+  if (pick && /^#/.test(PAL)) pick.value = PAL;
+}
+function setPalette(v, save) {
+  const p = normPal(v);
+  if (!p) return;
+  PAL = p;
+  if (save)
+    try {
+      localStorage.setItem('flowmap-flowcolor', PAL);
+    } catch (e) {}
+  applyPalette();
+}
+function initPalette() {
+  const box = $('#swatches');
+  if (box && !box.children.length) {
+    box.innerHTML =
+      Object.keys(PALS)
+        .map(
+          k =>
+            '<button type="button" data-pal="' +
+            k +
+            '" title="' +
+            PALS[k].n[0] +
+            '" aria-label="' +
+            PALS[k].n[0] +
+            '" style="background:' +
+            PALS[k].l[0] +
+            '"></button>',
+        )
+        .join('') +
+      '<input type="color" id="palCustom" value="#c9762a" title="Custom colour" aria-label="Custom colour">';
+    box.addEventListener('click', ev => {
+      const b = ev.target.closest('button[data-pal]');
+      if (b) setPalette(b.dataset.pal, true);
+    });
+    $('#palCustom').addEventListener('input', ev => setPalette(ev.target.value, true));
+  }
+  let saved = '';
+  try {
+    saved = localStorage.getItem('flowmap-flowcolor') || '';
+  } catch (e) {}
+  PAL =
+    normPal(QS.get('flows')) ||
+    normPal(saved) ||
+    normPal(D && D.meta && D.meta.flowColor) ||
+    'warm';
+  applyPalette();
+}
+
+/* ----------------------------------------------------------- look: mode */
+function setMode(m) {
+  MODE = m === 'dark' ? 'dark' : 'light';
+  document.body.classList.toggle('dark', MODE === 'dark');
+  applyPalette();
+  const g = getComputedStyle(document.body);
+  C.bg = g.getPropertyValue('--bg').trim();
+  C.ink = g.getPropertyValue('--ink').trim();
+  C.edge = g.getPropertyValue('--edge').trim();
+  C.spark = g.getPropertyValue('--spark').trim();
+  C.node = ['--recv', '--send', '--bal'].map(v => g.getPropertyValue(v).trim());
+  C.ring = g.getPropertyValue('--muted').trim();
+  $('#bMode').textContent = MODE === 'dark' ? '☀' : '☾';
+  try {
+    localStorage.setItem('flowmap-mode', MODE);
+  } catch (e) {}
+  if (style === 'light' || style === 'dark') setStyle(MODE === 'dark' ? 'dark' : 'light');
+  if (RM) draw(0);
+}
+function initDashboard() {
+  $('#bFlows').addEventListener('click', () => {
+    SHOW_FLOWS = !SHOW_FLOWS;
+    $('#bFlows').setAttribute('aria-pressed', SHOW_FLOWS ? 'true' : 'false');
+    if (RM) draw(0);
+  });
+  $('#bMode').addEventListener('click', () => setMode(MODE === 'dark' ? 'light' : 'dark'));
+  $('#bLayers').addEventListener('click', ev => {
+    ev.stopPropagation();
+    const pop = $('#lyrPop');
+    pop.hidden = !pop.hidden;
+    $('#bLayers').setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
+  });
+  document.addEventListener('click', ev => {
+    const pop = $('#lyrPop');
+    if (!pop.hidden && !pop.contains(ev.target)) {
+      pop.hidden = true;
+      $('#bLayers').setAttribute('aria-expanded', 'false');
+    }
+  });
+  $('#months').addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-i]');
+    if (!b) return;
+    const p = PER[+b.dataset.i];
+    if (ev.shiftKey) setRange(Math.min(FROM, p.a), Math.max(upTo, p.b));
+    else setRange(p.a, p.b);
+  });
+  $('#bPrev').addEventListener('click', () => stepPeriod(-1));
+  $('#bNext').addEventListener('click', () => stepPeriod(1));
+  $('#bAll').addEventListener('click', () => setRange(0, D.maxDay));
+  $('#bFirst').addEventListener('click', () =>
+    PER.length ? setRange(PER[0].a, PER[0].b) : setRange(0, 0),
+  );
+  $('#bLast').addEventListener('click', () => {
+    const p = PER[PER.length - 1];
+    if (p) setRange(p.a, p.b);
+    else setRange(D.maxDay, D.maxDay);
+  });
+  let saved = null;
+  try {
+    saved = localStorage.getItem('flowmap-mode');
+  } catch (e) {}
+  const asked = (QS.get('mode') || '').toLowerCase();
+  if (asked === 'dark' || asked === 'light') saved = asked;
+  if (saved === 'dark') setMode('dark');
+}
+
+/* ---------------------------------------------------------------- wiring */
+function initFeatures() {
+  initDashboard();
+  $('#bLang').addEventListener('click', () => setLang(LANG === 'fr' ? 'en' : 'fr'));
+  $('#selGrp').addEventListener('change', ev => setGroup(ev.target.value));
+  $('#selNode').addEventListener('change', ev => {
+    FILT.fd = +ev.target.value;
+    applyFilter();
+  });
+  $('#bClr').addEventListener('click', clearFilters);
+  $('#bTheme').addEventListener('click', () => {
+    THEME_ON = !THEME_ON;
+    renderTheme();
+    if (RM) draw(0);
+  });
+  $('#topN').addEventListener('input', ev => {
+    TOPN = +ev.target.value >= +ev.target.max ? null : +ev.target.value;
+    rebuild();
+    if (blend >= 0.02) configure(0.3);
+    if (RM) draw(0);
+  });
+  $('#slFrom').addEventListener('input', ev => {
+    FROM = +ev.target.value;
+    if (FROM > upTo) setDay(FROM);
+    else {
+      rebuild();
+      if (blend >= 0.02) configure(0.3);
+    }
+  });
+  $('#bNotes').addEventListener('click', () => {
+    const d = $('#notes');
+    if (d.showModal) d.showModal();
+    else d.setAttribute('open', '');
+  });
+  $('#bNotesClose').addEventListener('click', () => $('#notes').close && $('#notes').close());
+  $('#listRoutes').addEventListener('click', ev => {
+    const li = ev.target.closest('li[data-z]');
+    if (li) setNode(+li.dataset.z, true);
+  });
+  $('#listDest').addEventListener('click', ev => {
+    const li = ev.target.closest('li[data-z]');
+    if (li) setNode(+li.dataset.z, true);
+  });
+  $('#listNet').addEventListener('click', ev => {
+    const li = ev.target.closest('li[data-z]');
+    if (li) setNode(+li.dataset.z, true);
+  });
+  cv.addEventListener('click', ev => {
+    if (LASTDRAG) return;
+    const n = pick(ev);
+    if (n) setNode(n.i);
+  });
+  // the loader dialog is built by JS: translate it as it changes
+  const dlg = $('#dlg');
+  let busy = false;
+  new MutationObserver(() => {
+    if (busy) return;
+    busy = true;
+    tx(dlg);
+    busy = false;
+  }).observe(dlg, { childList: true, subtree: true, characterData: false });
+  let saved = null;
+  try {
+    saved = localStorage.getItem('flowmap-lang');
+  } catch (e) {}
+  const asked = (QS.get('lang') || '').toLowerCase();
+  const wanted =
+    (asked === 'fr' || asked === 'en' ? asked : '') ||
+    (D && D.meta && D.meta.lang) ||
+    saved ||
+    LANG;
+  setLang(wanted);
+}
+
+/* ====================================================================
+   Embedding (ArcGIS Experience Builder, any iframe). The page detects an
+   iframe, or ?embed=1, and switches to a compact layout. Options in the URL:
+   embed=1  panels=0 (map only)  header=0  lang=fr|en  mode=dark|light
+   ==================================================================== */
+const QS = (() => {
+  try {
+    return new URLSearchParams(location.search);
+  } catch (e) {
+    return new URLSearchParams('');
+  }
+})();
+const EMBED = (() => {
+  let framed = false;
+  try {
+    framed = window.self !== window.top;
+  } catch (e) {
+    framed = true;
+  }
+  return framed || /^(1|true|yes)$/i.test(QS.get('embed') || '');
+})();
+if (EMBED) {
+  const root = document.documentElement;
+  root.classList.add('embed');
+  if (QS.get('panels') === '0') root.classList.add('nopanels');
+  if (QS.get('header') === '0') root.classList.add('nohead');
+}
+function L(en, fr) {
+  return LANG === 'fr' ? fr : en;
+}
+function embedUrl(base, opts) {
+  const q = ['embed=1'];
+  if (opts.panels === false) q.push('panels=0');
+  if (opts.header === false) q.push('header=0');
+  if (opts.lang) q.push('lang=' + opts.lang);
+  if (opts.mode) q.push('mode=' + opts.mode);
+  return base.replace(/[?#].*$/, '') + '?' + q.join('&');
+}
+function openEmbed() {
+  const dlg = $('#embedDlg');
+  const body = $('#embBody');
+  $('#embTitle').textContent = L(
+    'Embed in ArcGIS Experience Builder',
+    'Intégrer dans ArcGIS Experience Builder',
+  );
+  const hosted = /^https?:/i.test(location.protocol) ? location.href : '';
+  body.innerHTML =
+    '<p>' +
+    esc(
+      L(
+        'Two ways, depending on what your organisation allows.',
+        'Deux façons, selon ce que votre organisation autorise.',
+      ),
+    ) +
+    '</p>' +
+    '<h3>1. ' +
+    esc(L('Link to the hosted page (recommended)', 'Lien vers la page hébergée (recommandé)')) +
+    '</h3>' +
+    '<p>' +
+    esc(
+      L(
+        'Put this HTML file on a web server over HTTPS (your Enterprise web server, IIS, a web adaptor folder, or any static host), then paste its address:',
+        'Placez ce fichier HTML sur un serveur web en HTTPS (serveur web de votre Enterprise, IIS, dossier du web adaptor, ou tout hébergement statique), puis collez son adresse :',
+      ),
+    ) +
+    '</p>' +
+    '<input type="text" id="embBase" placeholder="https://server.example.org/maps/flows/index.html" value="' +
+    esc(hosted) +
+    '" aria-label="URL">' +
+    '<div class="erow">' +
+    '<label><input type="checkbox" id="embPanels" checked> ' +
+    esc(L('Side panels', 'Panneaux latéraux')) +
+    '</label>' +
+    '<label><input type="checkbox" id="embHeader" checked> ' +
+    esc(L('Title bar', 'Barre de titre')) +
+    '</label>' +
+    '<label>' +
+    esc(L('Language', 'Langue')) +
+    ' <select id="embLang"><option value="">' +
+    esc(L('as now', 'comme maintenant')) +
+    '</option><option value="fr">Français</option><option value="en">English</option></select></label>' +
+    '<label>' +
+    esc(L('Theme', 'Thème')) +
+    ' <select id="embMode"><option value="">' +
+    esc(L('as now', 'comme maintenant')) +
+    '</option><option value="light">' +
+    esc(L('Light', 'Clair')) +
+    '</option><option value="dark">' +
+    esc(L('Dark', 'Sombre')) +
+    '</option></select></label>' +
+    '</div>' +
+    '<p><b>' +
+    esc(
+      L(
+        'Address for the Embed widget (Website / URL):',
+        'Adresse pour le widget Intégrer (Site web / URL) :',
+      ),
+    ) +
+    '</b></p>' +
+    '<textarea id="embUrl" readonly></textarea><div class="erow"><button class="act" id="embCopyUrl" type="button">' +
+    esc(L('Copy the address', 'Copier l’adresse')) +
+    '</button></div>' +
+    '<p><b>' +
+    esc(L('Or iframe code (Embed widget, Code):', 'Ou code iframe (widget Intégrer, Code) :')) +
+    '</b></p>' +
+    '<textarea id="embIframe" readonly></textarea><div class="erow"><button class="act" id="embCopyIframe" type="button">' +
+    esc(L('Copy the iframe code', 'Copier le code iframe')) +
+    '</button></div>' +
+    '<h3>2. ' +
+    esc(L('Single-file code (no hosting)', 'Code en un seul fichier (sans hébergement)')) +
+    '</h3>' +
+    '<p>' +
+    esc(
+      L(
+        'Copies the whole page, data included, to paste into the Embed widget in Code mode. Large pages may exceed what a widget accepts, and some organisations strip scripts from pasted code: if so, use the link above.',
+        'Copie toute la page, données comprises, à coller dans le widget Intégrer en mode Code. Les grosses pages peuvent dépasser ce qu’accepte un widget, et certaines organisations retirent les scripts du code collé : dans ce cas, utilisez le lien ci-dessus.',
+      ),
+    ) +
+    '</p>' +
+    '<div class="erow"><button class="act" id="embCopyCode" type="button">' +
+    esc(L('Copy the page code', 'Copier le code de la page')) +
+    '</button><span id="embSize"></span></div>' +
+    '<h3>' +
+    esc(L('To check on your side', 'À vérifier de votre côté')) +
+    '</h3>' +
+    '<ul><li>' +
+    esc(
+      L(
+        'The address must be HTTPS, and the server must allow being framed by your Portal (no X-Frame-Options: DENY, and frame-ancestors listing your Portal).',
+        'L’adresse doit être en HTTPS, et le serveur doit autoriser l’affichage dans un cadre par votre Portal (pas de X-Frame-Options: DENY, et frame-ancestors contenant votre Portal).',
+      ),
+    ) +
+    '</li>' +
+    '<li>' +
+    esc(
+      L(
+        'If your organisation keeps an allow-list of embeddable sites, add the host of the page.',
+        'Si votre organisation tient une liste de sites intégrables, ajoutez l’hôte de la page.',
+      ),
+    ) +
+    '</li>' +
+    '<li>' +
+    esc(
+      L(
+        'Basemap tiles come from tile servers (Esri, OpenStreetMap, Carto): they must be reachable and allowed by your content security policy. Without them, points, flows and outlines still display.',
+        'Les fonds de carte viennent de serveurs de tuiles (Esri, OpenStreetMap, Carto) : ils doivent être joignables et autorisés par votre politique de sécurité. Sans eux, points, flux et limites s’affichent quand même.',
+      ),
+    ) +
+    '</li>' +
+    '<li>' +
+    esc(
+      L(
+        'In Experience Builder, give the widget room (full height of its section): the map adapts to the frame size, and the side panels fold under the map in a narrow frame. Downloads (PDF, GIF) may be blocked inside a frame; open the page on its own for exports.',
+        'Dans Experience Builder, donnez de la place au widget (pleine hauteur de la section) : la carte s’adapte à la taille du cadre et les panneaux passent sous la carte dans un cadre étroit. Les téléchargements (PDF, GIF) peuvent être bloqués dans un cadre ; ouvrez la page seule pour exporter.',
+      ),
+    ) +
+    '</li></ul>';
+  const refresh = () => {
+    const base = $('#embBase').value.trim() || 'https://…/index.html';
+    const url = embedUrl(base, {
+      panels: $('#embPanels').checked,
+      header: $('#embHeader').checked,
+      lang: $('#embLang').value,
+      mode: $('#embMode').value,
+    });
+    $('#embUrl').value = url;
+    $('#embIframe').value =
+      '<iframe src="' +
+      url +
+      '" title="' +
+      esc(D.meta.title || 'Flow map') +
+      '" style="width:100%;height:100%;min-height:600px;border:0" loading="lazy" allowfullscreen></iframe>';
+  };
+  body.addEventListener('input', refresh);
+  body.addEventListener('change', refresh);
+  refresh();
+  const copy = async (text, ok) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      feedback(ok);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      let done = false;
+      try {
+        done = document.execCommand('copy');
+      } catch (e2) {}
+      ta.remove();
+      feedback(
+        done
+          ? ok
+          : L(
+              'Copy blocked: select the text and copy it by hand.',
+              'Copie bloquée : sélectionnez le texte et copiez-le à la main.',
+            ),
+        !done,
+      );
+    }
+  };
+  $('#embCopyUrl').onclick = () =>
+    copy($('#embUrl').value, L('Address copied.', 'Adresse copiée.'));
+  $('#embCopyIframe').onclick = () =>
+    copy($('#embIframe').value, L('Iframe code copied.', 'Code iframe copié.'));
+  try {
+    const bytes = buildStandaloneHTML();
+    $('#embSize').textContent = Math.round(bytes.length / 1024).toLocaleString() + ' KB';
+    $('#embCopyCode').onclick = () =>
+      copy(
+        new TextDecoder().decode(buildStandaloneHTML()),
+        L('Page code copied.', 'Code de la page copié.'),
+      );
+  } catch (e) {
+    $('#embCopyCode').disabled = true;
+    $('#embSize').textContent = String(e.message || e);
+  }
+  $('#embClose').onclick = () => dlg.close && dlg.close();
+  if (dlg.showModal) dlg.showModal();
+  else dlg.setAttribute('open', '');
+}
 
 /* ---------------------------------------------------------------- booting */
 /** Anything that goes wrong ends up on the page, not in a blank canvas. */
@@ -5987,10 +9612,16 @@ function boot() {
   // a copy of the page as it was authored, for the "self-contained page" export
   PAGE_SOURCE = document.documentElement ? document.documentElement.outerHTML : '';
   loadSource(window.__PRELOAD__ || EXAMPLE);
+  initPalette();
   setBlend(0, false);
   setLimit(D.admin2 ? 'districts' : D.admin1 ? 'governorates' : 'off');
-  if (RM) draw(0);
-  else requestAnimationFrame(loop);
+  initFeatures();
+  // The piece is an animation: the flows run and the travellers move. Windows
+  // "show animations off" sets prefers-reduced-motion, and this page used to
+  // honour it by drawing a single still frame - which reads as a broken page,
+  // not as a considerate one. Motion is on, and the Motion button turns it off.
+  draw(0);
+  requestAnimationFrame(loop);
 }
 
 /** The page's entry point: a failure here is reported, never silent. */

@@ -95,12 +95,35 @@ test('projection is Web Mercator and the whole country fits', () => {
       n.name + ' projected inside the frame',
     );
   }
+  // The frame is the extent of the places, not the whole country: the map
+  // opens where the flows are. Outlines are drawn over it and are allowed to
+  // run past the edge - that is the point of framing on the data.
+  const nodeLons = T.N().map(n => n.lon);
+  const nodeLats = T.N().map(n => n.lat);
+  const b = T.B();
+  assert.ok(b.lon0 < Math.min(...nodeLons), 'the frame starts just west of the places');
+  assert.ok(b.lon1 > Math.max(...nodeLons), 'and ends just east of them');
+  assert.ok(
+    b.lat0 < Math.min(...nodeLats) && b.lat1 > Math.max(...nodeLats),
+    'same north to south',
+  );
+  const margin = Math.min(Math.min(...nodeLons) - b.lon0, b.lon1 - Math.max(...nodeLons));
+  assert.ok(
+    margin < 1.5,
+    'framed on the data, not on the whole country: ' + margin.toFixed(2) + ' degrees',
+  );
   const props = T.getProps();
-  for (const [gov, e] of Object.entries(props.GOVPATH)) {
-    for (const ring of e.rings)
-      for (const [x, y] of ring)
-        assert.ok(x > 20 && x < 1130 && y > 20 && y < 693, gov + ' outline inside the frame');
-  }
+  const districts = Object.entries(props.DISTPATH || {});
+  assert.ok(districts.length > 0, 'district outlines are embedded');
+  let inside = 0,
+    total = 0;
+  for (const [, rings] of districts)
+    for (const ring of rings)
+      for (const [x, y] of ring) {
+        total++;
+        if (x > 0 && x < 1150 && y > 0 && y < 713) inside++;
+      }
+  assert.ok(inside / total > 0.5, 'most of the districts fall inside the data frame');
 });
 
 test('every basemap style is keyless and falls back sensibly', () => {
@@ -126,8 +149,13 @@ test('every basemap style is keyless and falls back sensibly', () => {
     const i = s.chain.indexOf('osm');
     if (i >= 0) assert.equal(i, s.chain.length - 1, name + ' keeps tile.openstreetmap.org last');
   }
-  assert.equal(T.get().style, 'dark');
-  assert.equal(T.curProv(), 'esriDark', 'dark starts on the dark esri tiles');
+  // The 7.7 layout is a light dashboard and opens on the light tiles; the
+  // dark look is one click away and uses the keyless dark chain.
+  assert.equal(T.get().style, 'light');
+  assert.equal(T.curProv(), 'esriLight', 'the light look starts on the light esri tiles');
+  T.setStyle('dark');
+  assert.equal(T.curProv(), 'esriDark', 'and the dark look on the dark ones');
+  T.setStyle('light');
 });
 
 test('a server that refuses tiles is dropped and the next one takes over', () => {
@@ -230,10 +258,14 @@ test('drawing paints the expected layers', () => {
   page.input('bld', 0);
 });
 
-test('reduced motion stops the animation loop but still draws', () => {
+test('the animation runs even when the system asks for reduced motion', () => {
+  // Windows "animation effects off" sets prefers-reduced-motion, and the page
+  // honoured it by drawing one still frame: flows with no travellers, a
+  // timeline that never moved. It read as a broken page, so the animation is
+  // the default now. The travellers are drawn in both cases.
   const still = loadPage({ reducedMotion: true });
-  assert.ok(still.ctx().__calls.arc > 0, 'draws the static frame');
-  assert.equal(still.log.raf, 0, 'no animation frames are scheduled');
+  assert.ok(still.ctx().__calls.arc > 0, 'draws the first frame');
+  assert.ok(still.log.raf > 0, 'and keeps asking for frames');
   still.click('bPlay');
   assert.ok(still.log.tickers.length >= 1, 'the timeline ticker started');
   const before = still.T.get().upTo;
@@ -327,4 +359,201 @@ test('dataset number formatting helpers', () => {
   assert.equal(T.plural('people'), 'people');
   assert.equal(T.fd(0), '4 Jan 2026');
   assert.equal(T.fd(1), '5 Jan 2026');
+});
+
+/** The built page with a different dataset inside it, as a built page carries one. */
+function pageWith(data) {
+  const html = page.html.replace(
+    /const EXAMPLE = \{[\s\S]*?\};/,
+    'const EXAMPLE = ' + JSON.stringify(data) + ';',
+  );
+  assert.notEqual(html, page.html, 'the example data was replaced');
+  return loadPage({ html });
+}
+
+test('a table whose flows never leave their place says so under the map', () => {
+  // Two places, both flows inside a place: the page has dots and no line, so
+  // it must say why instead of looking broken.
+  const p = pageWith({
+    meta: { title: 'One place', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
+    nodes: [
+      ['A', '', 9.0, 12.0],
+      ['B', '', 9.1, 12.1],
+    ],
+    edges: [
+      [0, 0, 0, 10],
+      [0, 1, 1, 5],
+    ],
+    maxDay: 0,
+    total: 15,
+  });
+  assert.match(p.els.bm.innerHTML, /starts and ends at the same place/);
+  assert.match(p.els.bm.innerHTML, /Give each end its own coordinates/);
+});
+
+test('an unnamed origin keeps its own dot, so the flow is a line', () => {
+  const p = pageWith({
+    meta: { title: 'Two ends', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
+    nodes: [
+      ['9.000, 12.000', '', 9.0, 12.0],
+      ['Dantchiao', '', 9.1, 12.1],
+    ],
+    edges: [[0, 0, 1, 10]],
+    maxDay: 0,
+    total: 10,
+  });
+  assert.equal(p.T.getLinks().length, 1, 'one route is drawn');
+  assert.notEqual(p.T.getLinks()[0].source, p.T.getLinks()[0].target, 'two different dots');
+  assert.equal(/starts and ends at the same place/.test(p.els.bm.innerHTML), false);
+});
+
+test('the page names the build that wrote it', () => {
+  const p = pageWith({
+    meta: { title: 'Stamped', dateMode: 'sequence', app: 'FlowMap 7.7' },
+    nodes: [['A', '', 9.0, 12.0]],
+    edges: [[0, 0, 0, 1]],
+    maxDay: 0,
+    total: 1,
+  });
+  assert.match(p.els.notesBody.innerHTML, /Built with FlowMap 7\.7/);
+});
+
+test('a table with one point per row shows its records moving round the dot', () => {
+  const p = pageWith({
+    meta: { title: 'Villages', unit: 'households', dateMode: 'sequence', app: 'FlowMap 6.9' },
+    nodes: [
+      ['A', '', 9.0, 12.0],
+      ['B', '', 9.1, 12.1],
+    ],
+    edges: [
+      [0, 0, 0, 10],
+      [0, 1, 1, 5],
+    ],
+    maxDay: 0,
+    total: 15,
+  });
+  // the subtitle must not promise lines a table of one point per row cannot give
+  assert.match(p.els.subtitle.textContent, /counted inside/);
+  assert.doesNotMatch(p.els.subtitle.textContent, /each line a flow/);
+  // and something must move: every active place gets a ring with sparks on it
+  const arcs = p.ctx().__calls.arc;
+  assert.ok(arcs >= 2 * p.T.getAct().length, 'ring sparks drawn (' + arcs + ' arcs)');
+  assert.ok(
+    p.T.getAct().every(n => n.within > 0),
+    'the records are inside the places',
+  );
+});
+
+/* ------------------------------------------------------- 7.7: the look */
+test('the colour of the flows is a choice: six palettes, a picker, a memory, the address', () => {
+  const p = loadPage();
+  assert.equal(p.T.getPal(), 'warm', 'warm by default');
+  const body = p.sandbox.document.body;
+  assert.equal(body.style.getPropertyValue('--edge'), '#c9762a');
+  assert.equal(p.T.C().edge, '#c9762a');
+
+  p.T.setPalette('teal', true);
+  assert.equal(p.T.getPal(), 'teal');
+  assert.equal(body.style.getPropertyValue('--edge'), '#14877a', 'the CSS variable follows');
+  assert.equal(p.T.C().edge, '#14877a');
+  assert.equal(p.sandbox.localStorage.getItem('flowmap-flowcolor'), 'teal', 'remembered');
+
+  // dark mode uses the light-on-dark variant of the same colour
+  p.T.setMode('dark');
+  assert.equal(body.style.getPropertyValue('--edge'), '#5cc79a');
+  assert.equal(body.style.getPropertyValue('--spark'), '#d4ffe8');
+  p.T.setMode('light');
+  assert.equal(body.style.getPropertyValue('--edge'), '#14877a');
+
+  // any colour can be typed or picked, #RRGGBB with or without the hash
+  p.T.setPalette('123456', true);
+  assert.equal(body.style.getPropertyValue('--edge'), '#123456');
+  assert.match(p.T.C().spark, /^#[0-9a-f]{6}$/, 'the moving dots get a lighter twin');
+
+  // nonsense is ignored, the last good colour stays
+  p.T.setPalette('nonsense');
+  assert.equal(p.T.getPal(), '#123456');
+  assert.equal(p.sandbox.document.body.style.getPropertyValue('--edge'), '#123456');
+
+  // ?flows= wins on a fresh page, and so does the remembered colour
+  const fromUrl = loadPage({ search: '?flows=magenta' });
+  assert.equal(fromUrl.sandbox.document.body.style.getPropertyValue('--edge'), '#b0307f');
+  const remembered = loadPage({ storage: { 'flowmap-flowcolor': 'grey' } });
+  assert.equal(remembered.sandbox.document.body.style.getPropertyValue('--edge'), '#6b7785');
+});
+
+test('the page speaks French and English', () => {
+  const p = loadPage();
+  assert.equal(p.T.getLang(), 'en');
+  assert.equal(p.els.lgIn.textContent, 'More in than out');
+  assert.equal(p.els.lblCum.textContent, 'Cumulative');
+
+  p.T.setLang('fr');
+  assert.equal(p.T.getLang(), 'fr');
+  assert.equal(p.els.lgIn.textContent, 'Plus d’entrées que de sorties');
+  assert.equal(p.els.lblCum.textContent, 'Cumulatif');
+  assert.equal(p.sandbox.localStorage.getItem('flowmap-lang'), 'fr', 'remembered');
+
+  p.T.setLang('en');
+  assert.equal(p.els.lgIn.textContent, 'More in than out');
+
+  // the address decides on a fresh page, then a remembered choice
+  assert.equal(loadPage({ search: '?lang=fr' }).T.getLang(), 'fr');
+  assert.equal(loadPage({ storage: { 'flowmap-lang': 'fr' } }).T.getLang(), 'fr');
+});
+
+test('unticking Cumulative leaves only the period on screen, everywhere', () => {
+  const p = loadPage();
+  const half = Math.floor(p.T.D().maxDay / 2);
+  p.setDay(half);
+  const cumulative = p.T.getLinks().length;
+  assert.ok(cumulative > 0);
+
+  p.toggle('chkCum', false);
+  assert.equal(p.T.getCum(), false);
+  assert.equal(p.T.get().upTo, half, 'the timeline does not move');
+  const single = p.T.getLinks().length;
+  assert.ok(single < cumulative, 'far fewer routes: ' + single + ' of ' + cumulative);
+  for (const l of p.T.getLinks()) assert.ok(l.w > 0, 'only the flows of that period carry weight');
+
+  p.toggle('chkCum', true);
+  assert.equal(p.T.getCum(), true);
+  assert.equal(p.T.getLinks().length, cumulative, 'ticking it back restores the whole run');
+});
+
+test('the printable map is a real one-page PDF', async () => {
+  const p = loadPage();
+  await p.settle(p.T.runExport('pdf'));
+  const file = p.lastDownload();
+  assert.match(file.name, /\.pdf$/);
+  assert.equal(file.type, 'application/pdf');
+  const bytes = file.blob.bytes();
+  assert.equal(String.fromCharCode(...bytes.slice(0, 8)), '%PDF-1.4', 'a PDF header');
+  assert.match(String.fromCharCode(...bytes.slice(-8)), /%%EOF/, 'and a closing marker');
+  const text = String.fromCharCode(...bytes);
+  assert.match(text, /\/MediaBox/, 'a page size');
+  assert.match(text, /DCTDecode/, 'the map is in it as an image');
+});
+
+test('the embed dialog writes the Experience Builder address and its iframe', () => {
+  const p = loadPage();
+  p.T.openEmbed();
+  assert.match(p.els.embBody.innerHTML, /Experience Builder/);
+  assert.match(p.els.embBody.innerHTML, /embBase/, 'and a place to put the address');
+  assert.equal(p.els.embUrl.value, 'https://…/index.html?embed=1', 'a readable placeholder');
+  assert.match(
+    p.els.embIframe.value,
+    /^<iframe src="https:\/\/…\/index\.html\?embed=1"/,
+    'the iframe code is filled',
+  );
+  assert.equal(
+    p.T.embedUrl('https://x.test/a/index.html?lang=fr', {
+      panels: false,
+      header: true,
+      lang: 'fr',
+      mode: 'dark',
+    }),
+    'https://x.test/a/index.html?embed=1&panels=0&lang=fr&mode=dark',
+    'the options become query parameters',
+  );
 });

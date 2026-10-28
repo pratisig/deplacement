@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en">
+  <Esri>
+    <CreaDate>20261020</CreaDate>
+    <CreaTime>00000000</CreaTime>
+    <ArcGISFormat>1.0</ArcGISFormat>
+    <SyncOnce>TRUE</SyncOnce>
+    <ModDate>20261021</ModDate>
+    <ModTime>00000000</ModTime>
+  </Esri>
+  <tool name="BuildFlowMapPage" displayname="Build a flow map page (6.9)" toolboxalias="flowmap">
+    <summary>Write a self-contained flow-map page, and optionally add the flows to the map for the Time Slider.</summary>
+    <parameters>
+      <param name="flows" displayname="Flow table or layer" datatype="GPTableView" direction="Input" expression="flows" parameterType="Required">
+        <dialogReference>The table that holds one row per flow: where it starts, where it goes, and optionally how much, when, and in which group. A layer, a feature class, a standalone table, a CSV, a JSON or a GeoJSON all work. Pick it first: every column list below is filled with its columns, and nothing is chosen for you - each field is yours to pick.</dialogReference>
+        <pythonReference>The table that holds one row per flow: where it starts, where it goes, and optionally how much, when, and in which group. A layer, a feature class, a standalone table, a CSV, a JSON or a GeoJSON all work. Pick it first: every column list below is filled with its columns, and nothing is chosen for you - each field is yours to pick.</pythonReference>
+      </param>
+      <param name="out_folder" displayname="Output folder" datatype="DEFolder" direction="Output" expression="out_folder" parameterType="Required">
+        <dialogReference>The folder the page is written to. Browse to it: a folder you can navigate to, not a path to type. index.html is written inside it, or the name given in 'Page file name'. Missing folders are created.</dialogReference>
+        <pythonReference>The folder the page is written to. Browse to it: a folder you can navigate to, not a path to type. index.html is written inside it, or the name given in 'Page file name'. Missing folders are created.</pythonReference>
+      </param>
+      <param name="page_name" displayname="Page file name" datatype="GPString" direction="Input" expression="page_name" parameterType="Optional">
+        <dialogReference>The name of the HTML file, written inside the output folder. Leave it empty for index.html. A name without .html gets it added.</dialogReference>
+        <pythonReference>The name of the HTML file, written inside the output folder. Leave it empty for index.html. A name without .html gets it added.</pythonReference>
+      </param>
+      <param name="o_name" displayname="Place name field (origin)" datatype="GPString" direction="Input" expression="o_name" parameterType="Optional">
+        <dialogReference>The column holding the place a flow starts from. Leave it empty when the table has no separate column for it: the origin is then labelled by its coordinates, which is what it is, and the flow stays a line between two points. Not needed at all when a places layer or an outlines layer can locate the names.</dialogReference>
+        <pythonReference>The column holding the place a flow starts from. Leave it empty when the table has no separate column for it: the origin is then labelled by its coordinates, which is what it is, and the flow stays a line between two points. Not needed at all when a places layer or an outlines layer can locate the names.</pythonReference>
+      </param>
+      <param name="d_name" displayname="Place name field (destination)" datatype="GPString" direction="Input" expression="d_name" parameterType="Optional">
+        <dialogReference>The column holding the place a flow goes to. Empty: the origin column is used for both ends, and a row whose two coordinate pairs are the same point counts as a record inside that place. When the origins and destinations are told apart by their coordinates rather than by their names, either put the same column in both name fields - the two positions stay two dots - or leave the origin name empty: its end is then labelled by its position and the flow is still a line.</dialogReference>
+        <pythonReference>The column holding the place a flow goes to. Empty: the origin column is used for both ends, and a row whose two coordinate pairs are the same point counts as a record inside that place. When the origins and destinations are told apart by their coordinates rather than by their names, either put the same column in both name fields - the two positions stay two dots - or leave the origin name empty: its end is then labelled by its position and the flow is still a line.</pythonReference>
+      </param>
+      <param name="value" displayname="Value field (empty counts 1)" datatype="GPString" direction="Input" expression="value" parameterType="Optional">
+        <dialogReference>The column holding the quantity to draw - households, people, cases, MILDA, tonnes. It must contain numbers: a column of text codes is refused by name. Leave it empty and every row counts 1.</dialogReference>
+        <pythonReference>The column holding the quantity to draw - households, people, cases, MILDA, tonnes. It must contain numbers: a column of text codes is refused by name. Leave it empty and every row counts 1.</pythonReference>
+      </param>
+      <param name="date" displayname="Date or day field" datatype="GPString" direction="Input" expression="date" parameterType="Optional">
+        <dialogReference>The column holding the date, or a plain day number, that drives the animation. Leave it empty and everything happens on one day.</dialogReference>
+        <pythonReference>The column holding the date, or a plain day number, that drives the animation. Leave it empty and everything happens on one day.</pythonReference>
+      </param>
+      <param name="o_lon" displayname="Origin longitude field" datatype="GPString" direction="Input" expression="o_lon" parameterType="Optional">
+        <dialogReference>The longitude of the place a flow starts from, in degrees (WGS84). A column in metres is reported as an error rather than drawn off the map.</dialogReference>
+        <pythonReference>The longitude of the place a flow starts from, in degrees (WGS84). A column in metres is reported as an error rather than drawn off the map.</pythonReference>
+      </param>
+      <param name="o_lat" displayname="Origin latitude field" datatype="GPString" direction="Input" expression="o_lat" parameterType="Optional">
+        <dialogReference>The latitude of the place a flow starts from, in degrees (WGS84). The tool checks that this column and the longitude column are the right way round, and swaps them if they are not.</dialogReference>
+        <pythonReference>The latitude of the place a flow starts from, in degrees (WGS84). The tool checks that this column and the longitude column are the right way round, and swaps them if they are not.</pythonReference>
+      </param>
+      <param name="d_lon" displayname="Destination longitude field" datatype="GPString" direction="Input" expression="d_lon" parameterType="Optional">
+        <dialogReference>The longitude of the place a flow goes to, in degrees. Leave empty when the destination is the origin.</dialogReference>
+        <pythonReference>The longitude of the place a flow goes to, in degrees. Leave empty when the destination is the origin.</pythonReference>
+      </param>
+      <param name="d_lat" displayname="Destination latitude field" datatype="GPString" direction="Input" expression="d_lat" parameterType="Optional">
+        <dialogReference>The latitude of the place a flow goes to, in degrees. Leave empty when the destination is the origin.</dialogReference>
+        <pythonReference>The latitude of the place a flow goes to, in degrees. Leave empty when the destination is the origin.</pythonReference>
+      </param>
+      <param name="places" displayname="Places to look names up" datatype="GPFeatureLayer" direction="Input" expression="places" parameterType="Optional">
+        <dialogReference>A point layer giving the coordinates of the names in the flow table, for tables that have no coordinates of their own. Optional.</dialogReference>
+        <pythonReference>A point layer giving the coordinates of the names in the flow table, for tables that have no coordinates of their own. Optional.</pythonReference>
+      </param>
+      <param name="places_name" displayname="Name field in the places layer" datatype="GPString" direction="Input" expression="places_name" parameterType="Optional">
+        <dialogReference>The column of the places layer that holds the place name: it is matched against the names in the flow table, ignoring case, accents and punctuation.</dialogReference>
+        <pythonReference>The column of the places layer that holds the place name: it is matched against the names in the flow table, ignoring case, accents and punctuation.</pythonReference>
+      </param>
+      <param name="places_group" displayname="Group field in the places layer" datatype="GPString" direction="Input" expression="places_group" parameterType="Optional">
+        <dialogReference>The column of the places layer that holds the region or group a place belongs to. Optional: it colours the dots.</dialogReference>
+        <pythonReference>The column of the places layer that holds the region or group a place belongs to. Optional: it colours the dots.</pythonReference>
+      </param>
+      <param name="bounds_fine" displayname="Detailed outlines" datatype="GPFeatureLayer" direction="Input" expression="bounds_fine" parameterType="Optional">
+        <dialogReference>The detailed outlines (districts, communes, admin 2). They are drawn on the page and their names can locate places. Optional.</dialogReference>
+        <pythonReference>The detailed outlines (districts, communes, admin 2). They are drawn on the page and their names can locate places. Optional.</pythonReference>
+      </param>
+      <param name="bounds_fine_name" displayname="Name field in the outlines" datatype="GPString" direction="Input" expression="bounds_fine_name" parameterType="Optional">
+        <dialogReference>The column of the detailed outlines holding the name to match against the flow table. Required when outlines are chosen.</dialogReference>
+        <pythonReference>The column of the detailed outlines holding the name to match against the flow table. Required when outlines are chosen.</pythonReference>
+      </param>
+      <param name="bounds_coarse" displayname="Coarse outlines" datatype="GPFeatureLayer" direction="Input" expression="bounds_coarse" parameterType="Optional">
+        <dialogReference>The coarse outlines (provinces, governorates, admin 1), drawn under the detailed ones. Optional.</dialogReference>
+        <pythonReference>The coarse outlines (provinces, governorates, admin 1), drawn under the detailed ones. Optional.</pythonReference>
+      </param>
+      <param name="bounds_coarse_name" displayname="Name field in the coarse outlines" datatype="GPString" direction="Input" expression="bounds_coarse_name" parameterType="Optional">
+        <dialogReference>The column of the coarse outlines holding the name to match against the flow table. Required when coarse outlines are chosen.</dialogReference>
+        <pythonReference>The column of the coarse outlines holding the name to match against the flow table. Required when coarse outlines are chosen.</pythonReference>
+      </param>
+      <param name="open_page" displayname="Open the page when it is written" datatype="GPBoolean" direction="Input" expression="open_page" parameterType="Optional">
+        <dialogReference>Open the page in the default browser as soon as it is written. The page is a single file: it can be moved, mailed or put on a shared drive and it still works offline.</dialogReference>
+        <pythonReference>Open the page in the default browser as soon as it is written. The page is a single file: it can be moved, mailed or put on a shared drive and it still works offline.</pythonReference>
+      </param>
+      <param name="title" displayname="Title" datatype="GPString" direction="Input" expression="title" parameterType="Optional">
+        <dialogReference>The title written at the top of the page. Empty: the name of the table, cleaned up.</dialogReference>
+        <pythonReference>The title written at the top of the page. Empty: the name of the table, cleaned up.</pythonReference>
+      </param>
+      <param name="subtitle" displayname="Subtitle" datatype="GPString" direction="Input" expression="subtitle" parameterType="Optional">
+        <dialogReference>A second line under the title. Empty: a sentence describing what the dots and lines are.</dialogReference>
+        <pythonReference>A second line under the title. Empty: a sentence describing what the dots and lines are.</pythonReference>
+      </param>
+      <param name="unit" displayname="Unit of the values (empty: deduced)" datatype="GPString" direction="Input" expression="unit" parameterType="Optional">
+        <dialogReference>What the values are counted in: households, people, cases, MILDA. Empty: deduced from the value column, or 'records'.</dialogReference>
+        <pythonReference>What the values are counted in: households, people, cases, MILDA. Empty: deduced from the value column, or 'records'.</pythonReference>
+      </param>
+      <param name="node_label" displayname="What one dot is called" datatype="GPString" direction="Input" expression="node_label" parameterType="Optional">
+        <dialogReference>What one dot is called on the page: place, village, district. Empty: 'place'.</dialogReference>
+        <pythonReference>What one dot is called on the page: place, village, district. Empty: 'place'.</pythonReference>
+      </param>
+      <param name="group_label" displayname="What a group is called" datatype="GPString" direction="Input" expression="group_label" parameterType="Optional">
+        <dialogReference>What a group of dots is called: region, province, area. Empty: 'area' when outlines are given, otherwise 'group'.</dialogReference>
+        <pythonReference>What a group of dots is called: region, province, area. Empty: 'area' when outlines are given, otherwise 'group'.</pythonReference>
+      </param>
+      <param name="source" displayname="Source note" datatype="GPString" direction="Input" expression="source" parameterType="Optional">
+        <dialogReference>The credit line at the foot of the page. Empty: the table name and the workspace.</dialogReference>
+        <pythonReference>The credit line at the foot of the page. Empty: the table name and the workspace.</pythonReference>
+      </param>
+      <param name="add_animation" displayname="Add the flows to the map, ready for the Time Slider" datatype="GPBoolean" direction="Input" expression="add_animation" parameterType="Optional">
+        <dialogReference>Also write the flows as a line feature class with a date field, add it to the current map and turn time on, so the Time Slider plays the animation in Pro itself and can export it as a video. The feature class and a .lyrx are saved in the output folder.</dialogReference>
+        <pythonReference>Also write the flows as a line feature class with a date field, add it to the current map and turn time on, so the Time Slider plays the animation in Pro itself and can export it as a video. The feature class and a .lyrx are saved in the output folder.</pythonReference>
+      </param>
+      <param name="template" displayname="Page template" datatype="DEFile" direction="Input" expression="template" parameterType="Optional">
+        <dialogReference>The page to fill with data: the built index.html. Empty: the index.html next to this toolbox.</dialogReference>
+        <pythonReference>The page to fill with data: the built index.html. Empty: the index.html next to this toolbox.</pythonReference>
+      </param>
+      <param name="out_json" displayname="Also write the dataset (JSON)" datatype="DEFile" direction="Output" expression="out_json" parameterType="Optional">
+        <dialogReference>Also write the dataset as JSON, for a script, a database or another page. Optional.</dialogReference>
+        <pythonReference>Also write the dataset as JSON, for a script, a database or another page. Optional.</pythonReference>
+      </param>
+    </parameters>
+  </tool>
+</metadata>

@@ -382,3 +382,290 @@ test('a JSON array of rows works end to end', () => {
   // no coordinates and no boundaries: the loader must say so instead of guessing
   assert.ok([...T.mappingIssues(mapping, table, [])].length >= 1);
 });
+
+/* ---------------------------------------------------------- 7.7: two values */
+test('a second quantity: arrivals follow the arrival value, the lines the departure', () => {
+  const csv = ['from,to,day,left,arrived', 'Alpha,Beta,0,100,40', 'Beta,Alpha,1,20,90'].join('\n');
+  const table = T.parseTable(csv, 'two-values.csv');
+  const mapping = {
+    oName: 'from',
+    dName: 'to',
+    date: 'day',
+    dateMode: 'day',
+    value: 'left',
+    valueIn: 'arrived',
+  };
+  const areas = [{ parsed: T.parseBoundaryGeoJSON(DISTRICTS_GEOJSON, {}), file: 'areas.geojson' }];
+  const { source } = T.assembleDataset({
+    table,
+    mapping,
+    boundaries: areas,
+    options: { inLabel: 'Products distributed', outLabel: 'Households targeted' },
+  });
+  assert.equal(source.edges.length, 2);
+  assert.deepEqual(Array.from(source.edges[0]), [0, 0, 1, 100, 40], 'day, from, to, left, arrived');
+  assert.equal(source.total, 120, 'the departure values add up');
+  assert.equal(source.totalIn, 130, 'and the arrival values are kept apart');
+  assert.equal(source.meta.inLabel, 'Products distributed');
+  assert.equal(source.meta.outLabel, 'Households targeted');
+
+  // on the page: the line weight is the departure value, the dot the arrival one
+  const two = loadPage();
+  two.T.loadSource(source);
+  two.T.rebuild();
+  const [alpha, beta] = Array.from(two.T.N());
+  assert.equal(alpha.out, 100, 'A sent 100');
+  assert.equal(beta.inn, 40, 'B received 40, not the 100 that left');
+  assert.equal(beta.out, 20);
+  assert.equal(alpha.inn, 90);
+  assert.equal(alpha.net, 90 - 100, 'the net balance follows arrivals');
+  // the author's own words reach the legend
+  assert.equal(two.els.lgIn.textContent, 'More Products distributed than Households targeted');
+  assert.equal(two.T.wArr(), 'Products distributed');
+  assert.equal(two.T.wLeft(), 'Households targeted');
+});
+
+test('an empty arrival cell means "the same as the departure value"', () => {
+  const csv = ['from,to,day,left,arrived', 'Alpha,Beta,0,50,', 'Beta,Alpha,1,30,10'].join('\n');
+  const table = T.parseTable(csv, 'half.csv');
+  const mapping = {
+    oName: 'from',
+    dName: 'to',
+    date: 'day',
+    dateMode: 'day',
+    value: 'left',
+    valueIn: 'arrived',
+  };
+  const { source } = T.assembleDataset({
+    table,
+    mapping,
+    boundaries: [{ parsed: T.parseBoundaryGeoJSON(DISTRICTS_GEOJSON, {}), file: 'a.geojson' }],
+    options: {},
+  });
+  assert.deepEqual(Array.from(source.edges[0]), [0, 0, 1, 50, 50]);
+  assert.equal(source.totalIn, 60);
+});
+
+test('the loader offers the arrival value and the two quantity names', () => {
+  const fields = T.MAPPING_FIELDS.map(f => f[0]);
+  assert.ok(fields.includes('valueIn'), 'the mapping form has the arrival value column');
+  assert.equal(T.MAPPING_FIELDS.find(f => f[0] === 'valueIn')[2], false, 'it is optional');
+  // a flow table with only one value still loads, and no second quantity is invented
+  const table = T.parseTable(MALI_CSV, 'mali.csv');
+  const mapping = T.guessMapping(table.headers, table.rows, fields);
+  assert.equal(mapping.valueIn, '', 'nothing is guessed into a column the user did not choose');
+  const { source } = T.assembleDataset({ table, mapping, boundaries: [], options: {} });
+  assert.equal(source.edges[0].length, 4, 'one value, a four-part flow');
+  assert.equal(source.totalIn, undefined);
+});
+
+/* ------------------------------------------------------ 7.7: values by area */
+const GOVERNORATES_GEOJSON = JSON.stringify({
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { name: 'North' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0],
+          ],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'South' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [1, 0],
+            [2, 0],
+            [2, 1],
+            [1, 1],
+            [1, 0],
+          ],
+        ],
+      },
+    },
+  ],
+});
+
+test('values by area: a table of names and values becomes the thematic layer', () => {
+  const table = T.parseTable(NAME_ONLY_CSV, 'flows.csv');
+  const mapping = T.guessMapping(
+    table.headers,
+    table.rows,
+    T.MAPPING_FIELDS.map(f => f[0]),
+  );
+  const { source, warnings } = T.assembleDataset({
+    table,
+    mapping,
+    boundaries: [
+      { parsed: T.parseBoundaryGeoJSON(GOVERNORATES_GEOJSON, {}), file: 'gov.geojson' },
+      { parsed: T.parseBoundaryGeoJSON(DISTRICTS_GEOJSON, {}), file: 'districts.geojson' },
+    ],
+    options: {},
+    theme: {
+      rows: [
+        { name: 'Alpha', value: 10 },
+        { name: 'alpha', value: 5 },
+        { name: 'Beta', value: 4 },
+        { name: 'Gamma', value: 3 },
+      ],
+      label: 'Population',
+      source: 'values.csv',
+    },
+  });
+  assert.ok(source.theme, 'the page gets an area-value layer');
+  assert.equal(source.theme.label, 'Population');
+  assert.equal(source.theme.areas.length, 2, 'Gamma is not in the boundaries');
+  const alpha = source.theme.areas.find(a => a.n === 'Alpha');
+  assert.equal(alpha.v, 15, 'rows for one area are summed');
+  assert.equal(alpha.g, 'North', 'the larger area that holds it names the group');
+  assert.ok(alpha.p.length && alpha.p[0].length > 6, 'the outline is flat rings');
+  assert.match(warnings.join(' '), /Gamma/, 'the missing area is reported');
+  assert.equal(source.theme.areas[0].n, 'Alpha', 'sorted by value');
+
+  // the page adopts it and offers the layer
+  const p = loadPage();
+  p.T.loadSource(source);
+  const th = p.T.getTheme();
+  assert.ok(th, 'prepared for drawing');
+  assert.equal(th.total, 19);
+  assert.equal(p.els.bTheme.hidden, false, 'the layer button is offered');
+  assert.equal(p.els.bTheme.textContent, 'Population');
+  assert.equal(p.els.cThemeSum.hidden, false, 'and its summary card');
+  assert.match(p.els.themeKpis.innerHTML, /19/, 'the total is on the card');
+  p.T.rebuild();
+  assert.ok(p.T.getLinks().length > 0, 'the flows still draw over it');
+});
+
+test('values by area can come as a polygon layer with the value inside', () => {
+  const geojson = JSON.stringify({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { name: 'Alpha', population: 12 },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+              [0, 0],
+            ],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { name: 'Beta', population: 8 },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [1, 0],
+              [2, 0],
+              [2, 1],
+              [1, 1],
+              [1, 0],
+            ],
+          ],
+        },
+      },
+    ],
+  });
+  const picked = T.themeRowsFromText(geojson, 'areas.geojson');
+  assert.equal(picked.rows.length, 2);
+  assert.equal(picked.label, 'population', 'the numeric property is found by name');
+  assert.ok(picked.rows[0].rings.length, 'the outlines travel with the values');
+
+  // the outlines it brings are enough: no boundary file needed
+  const table = T.parseTable(MALI_CSV, 'mali.csv');
+  const mapping = T.guessMapping(
+    table.headers,
+    table.rows,
+    T.MAPPING_FIELDS.map(f => f[0]),
+  );
+  const { source } = T.assembleDataset({
+    table,
+    mapping,
+    boundaries: [],
+    options: {},
+    theme: { ...picked, source: 'areas.geojson' },
+  });
+  assert.equal(source.theme.areas.length, 2);
+  assert.equal(source.theme.areas[0].v, 12);
+});
+
+test('an area-values table is read by column, whatever its headings', () => {
+  const picked = T.themeRowsFromText('district,people\nAlpha,30\nBeta,12\n', 'v.csv');
+  assert.equal(picked.label, 'people');
+  assert.deepEqual(
+    Array.from(picked.rows, r => [r.name, Number(r.value)]),
+    [
+      ['Alpha', 30],
+      ['Beta', 12],
+    ],
+  );
+  assert.throws(() => T.themeRowsFromText('a,b\n1,2\n', 'x.csv'), /area name/i);
+  assert.throws(() => T.themeRowsFromText('name,code\nAlpha,North\n', 'y.csv'), /numeric/i);
+});
+
+test('two boundary layers give every place its group, as the toolbox does', () => {
+  const table = T.parseTable(NAME_ONLY_CSV, 'flows.csv');
+  const mapping = T.guessMapping(
+    table.headers,
+    table.rows,
+    T.MAPPING_FIELDS.map(f => f[0]),
+  );
+  const boundaries = [
+    { parsed: T.parseBoundaryGeoJSON(GOVERNORATES_GEOJSON, {}), file: 'regions.geojson' },
+    { parsed: T.parseBoundaryGeoJSON(DISTRICTS_GEOJSON, {}), file: 'districts.geojson' },
+  ];
+  const { source } = T.assembleDataset({
+    table,
+    mapping,
+    boundaries,
+    options: { subtitle: 'Movements of households', source: 'IOM DTM' },
+  });
+  assert.deepEqual(
+    Array.from(source.nodes, n => [n[0], n[1]]),
+    [
+      ['Alpha', 'North'],
+      ['Beta', 'South'],
+    ],
+    'the region whose outline holds the district is its group',
+  );
+  assert.equal(source.meta.subtitle, 'Movements of households');
+  assert.equal(source.meta.source, 'IOM DTM');
+
+  // one layer alone: a place is its own area, so no group is invented
+  const single = T.assembleDataset({
+    table,
+    mapping,
+    boundaries: [boundaries[1]],
+    options: {},
+  });
+  assert.deepEqual(
+    Array.from(single.source.nodes, n => n[1]),
+    ['', ''],
+  );
+
+  // the arrival groups panel then has something to show
+  const p = loadPage();
+  p.T.loadSource(source);
+  p.T.rebuild();
+  assert.match(p.els.listGroups.innerHTML, /North|South/, 'arrivals are counted by group');
+});

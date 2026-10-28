@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<meta name="flowmap-template" content="7.7">
 <meta charset=utf8>
 <meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Flow map</title>
@@ -10,80 +11,152 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="head">
-    <h1 id="title">Flow map</h1>
-    <p class="sub" id="subtitle"></p>
+<div class="app" id="app">
+  <header class="top">
+    <div class="ttl">
+      <h1 id="title">Flow map</h1>
+      <p class="sub" id="subtitle"></p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="tools">
+      <button class="chk" id="bFlows" type="button" aria-pressed="true">Flows</button>
+      <button class="chk" id="bTheme" type="button" aria-pressed="true" hidden></button>
+      <button class="hbtn" id="bNotes" type="button">ⓘ Notes</button>
+      <button class="hbtn" id="bLang" type="button" title="Français / English">FR</button>
+      <button class="hbtn" id="bMode" type="button" title="Light / dark">☾</button>
+      <div class="menu">
+        <button class="hbtn" id="bExport" type="button" aria-expanded="false" aria-haspopup="true">Export ▾</button>
+        <div class="menu-pop" id="exportPop" hidden role="menu"></div>
+      </div>
+      <button class="hbtn" id="bLoad" type="button">Load data…</button>
+    </div>
   </header>
 
-  <div class="stage" id="stage">
-    <canvas id="cv" role="img" aria-label="Map of places linked by flows. A table view with the busiest places is below the chart."></canvas>
-    <div class="stats" id="stats"></div>
-  </div>
+  <aside class="side left" aria-label="Controls">
+    <section class="card" id="flt">
+      <h2 id="lblFilter">Filters</h2>
+      <label class="fl" id="lblGrp" for="selGrp">Group</label>
+      <select id="selGrp" aria-label="Group"></select>
+      <label class="fl" id="lblNode" for="selNode">Place</label>
+      <select id="selNode" aria-label="Place"></select>
+      <button class="act" id="bClr" type="button" hidden>Clear filters</button>
+    </section>
 
-  <div class="ctl">
-    <div class="lay">
-      <label for="bld">Layout</label>
-      <input id="bld" type="range" min="0" max="100" step="1" value="0">
-      <span class="layv" id="layv">Geo</span>
+    <section class="card" id="cPeriod">
+      <h2>Period</h2>
+      <div class="pbar">
+        <button class="act" id="bPrev" type="button" title="Previous period" aria-label="Previous period">‹</button>
+        <button class="play" id="bPlay" type="button">Play</button>
+        <button class="act" id="bNext" type="button" title="Next period" aria-label="Next period">›</button>
+      </div>
+      <label class="cum"><input type="checkbox" id="chkCum" checked> <span id="lblCum">Cumulative</span></label>
+      <div class="months" id="months" role="group" aria-label="Periods"></div>
+      <div class="sl"><label for="slFrom" id="lblFrom">From</label><input id="slFrom" type="range" min="0" max="1" step="1" value="0"></div>
+      <div class="sl"><label for="sl" id="lblUpTo">Up to</label><input id="sl" type="range" min="0" max="1" step="1" value="0"></div>
+      <div class="dt" id="dt"></div>
+      <p class="ptot" id="ptot"></p>
+      <div class="row3">
+        <button class="act" id="bAll" type="button">All</button>
+        <button class="act" id="bFirst" type="button">First</button>
+        <button class="act" id="bLast" type="button">Last</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span id="lblTopN">Routes shown</span> : <span id="topNVal"></span></h2>
+      <input id="topN" type="range" min="5" max="300" step="1" value="300" aria-labelledby="lblTopN">
+      <p class="phint">Strongest routes only; the analysis covers every route.</p>
+    </section>
+
+    <section class="card">
+      <h2>Legend</h2>
+      <ul class="legend">
+        <li><span class="sw" style="background:var(--recv)"></span><span id="lgIn">More in than out</span></li>
+        <li><span class="sw" style="background:var(--send)"></span><span id="lgOut">More out than in</span></li>
+        <li><span class="sw" style="background:var(--bal)"></span>Roughly balanced</li>
+        <li><span class="ring"></span>Ring: movement inside the place itself</li>
+        <li><span class="grad"></span>Route: weak → strong (arrow = direction)</li>
+        <li><span class="ln"></span>Between groups</li>
+        <li><span class="ln d"></span>Within one group</li>
+        <li><span class="bnd"></span>Level 1 limit</li>
+        <li><span class="bnd f"></span>Level 2 limit</li>
+      </ul>
+      <div class="themekey" id="lgTheme" hidden></div>
+    </section>
+  </aside>
+
+  <main class="mid">
+    <div class="stage" id="stage">
+      <canvas id="cv" role="img" aria-label="Map of places linked by flows. A table view with the busiest places is below the chart."></canvas>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button id="bZin" type="button" title="Zoom in">+</button>
+        <button id="bZout" type="button" title="Zoom out">&minus;</button>
+        <button id="bFit" type="button" title="Centre the map on the data">⌖</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <button class="lyrbtn" id="bLayers" type="button" aria-expanded="false" title="Map layers" aria-label="Map layers">◫</button>
+      <div class="lyrpop" id="lyrPop" hidden>
+        <div class="seg" role="group" aria-label="Background map">
+          <button id="bLight" type="button" aria-pressed="true">Light</button>
+          <button id="bDark" type="button" aria-pressed="false">Dark</button>
+          <button id="bTerrain" type="button" aria-pressed="false">Terrain</button>
+          <button id="bSat" type="button" aria-pressed="false">Satellite</button>
+          <button id="bNone" type="button" aria-pressed="false">None</button>
+        </div>
+        <button class="toggle" id="bLim" type="button" aria-pressed="true">Limits</button>
+        <div class="lay">
+          <label id="lblFlowCol">Flow colour</label>
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="lay">
+          <label for="bld">Layout</label>
+          <input id="bld" type="range" min="0" max="100" step="1" value="0">
+          <span class="layv" id="layv">Geo</span>
+        </div>
+      </div>
     </div>
-    <div class="seg" role="group" aria-label="Background map">
-      <button id="bDark" type="button" aria-pressed="true">Dark</button>
-      <button id="bLight" type="button" aria-pressed="false">Light</button>
-      <button id="bTerrain" type="button" aria-pressed="false">Terrain</button>
-      <button id="bSat" type="button" aria-pressed="false">Satellite</button>
-      <button id="bNone" type="button" aria-pressed="false">None</button>
-    </div>
-    <button class="toggle" id="bLim" type="button" aria-pressed="true">Limits</button>
-    <button class="play" id="bPlay" type="button">Play</button>
-    <div class="sl">
-      <label for="sl">Up to</label>
-      <input id="sl" type="range" min="0" max="1" step="1" value="0">
-      <span class="dt" id="dt"></span>
-    </div>
-    <button class="act" id="bLoad" type="button">Load data…</button>
-    <div class="menu">
-      <button class="act" id="bExport" type="button" aria-expanded="false" aria-haspopup="true">Export ▾</button>
-      <div class="menu-pop" id="exportPop" hidden role="menu"></div>
-    </div>
-  </div>
+    <p class="bm" id="bm"></p>
+    <p class="toast" id="toast" hidden></p>
+    <p class="insight" id="insight" hidden></p>
 
-  <p class="bm" id="bm"></p>
-  <p class="toast" id="toast" hidden></p>
+    <details id="tv">
+      <summary>Table view: the busiest places for the chosen date</summary>
+      <div class="tw"><table>
+        <thead id="tbHead"></thead>
+        <tbody id="tb"></tbody>
+      </table></div>
+    </details>
+    <div class="note" id="noteBox"></div>
+    <footer class="foot"><span>Built from a table.</span></footer>
+  </main>
 
-  <ul class="legend">
-    <li><span class="sw" style="background:var(--recv)"></span>More in than out</li>
-    <li><span class="sw" style="background:var(--send)"></span>More out than in</li>
-    <li><span class="sw" style="background:var(--bal)"></span>Roughly balanced</li>
-    <li><span class="ring"></span>Ring: movement inside the place itself</li>
-    <li><span class="ln"></span>Between groups</li>
-    <li><span class="ln d"></span>Within one group</li>
-    <li><span class="bnd"></span>Level 1 limit</li>
-    <li><span class="bnd f"></span>Level 2 limit</li>
-  </ul>
-
-  <details id="tv">
-    <summary>Table view: the busiest places for the chosen date</summary>
-    <div class="tw"><table>
-      <thead id="tbHead"></thead>
-      <tbody id="tb"></tbody>
-    </table></div>
-  </details>
-
-  <div class="note">
-    <p>Dot size shows everything that moved into, out of or within one <span id="lgNode">place</span> — in <b id="lgUnit">records</b>. Line thickness shows the value carried on that route. Hover a dot to see only its routes.</p>
-    <p>The <b>Layout</b> slider moves between true geography and a network layout: in the network, places that exchange many flows sit close together, so distance has no geographic meaning. Background maps fade out as the network takes over.</p>
-    <p>Background maps are public tile servers that need no API key and no sign-up: Esri dark gray, Esri light gray, Esri satellite, OpenTopoMap, Wikimedia Maps, OpenStreetMap France and OpenStreetMap. If a server refuses the tiles, the map switches to the next one by itself. Choose <b>None</b> to draw only your own data and boundaries.</p>
-    <p id="noteSource">Source: IOM DTM Rapid Displacement Tracking, district level. Households are counted from assessments and added up from 4 January to the date chosen, so a family assessed twice counts twice.</p>
-    <p><b>Any table works.</b> Press <b>Load data…</b> and drop a CSV, TSV or JSON file with one row per flow — an origin, a destination and a value, plus either coordinates or names that match a boundary file you also load. Nothing is uploaded: the file is read in the browser and stays there. <b>Export</b> writes the current day out as JSON, CSV, GeoJSON, GeoParquet or zipped shapefiles, and the whole period as an animated GIF or a WebM video.</p>
-  </div>
-
-  <footer class="foot">
-    <span>Built from a table. <a href="https://github.com/pratisig/deplacement">Source</a>.</span>
-  </footer>
+  <aside class="side right" id="agrid" aria-label="Analysis">
+    <section class="card pane" id="cThemeSum" hidden>
+      <h2 id="hThemeSum"></h2>
+      <div class="tsum" id="themeKpis"></div>
+      <ul class="blist" id="listTheme"></ul>
+      <p class="phint" id="themeShare"></p>
+      <h2 class="sub2" id="hThemeGrp"></h2>
+      <ul class="blist" id="listThemeGrp"></ul>
+    </section>
+    <section class="card pane"><h2 id="hRoutes"></h2><ul class="blist" id="listRoutes"></ul></section>
+    <section class="card pane"><h2 id="hDest"></h2><ul class="blist" id="listDest"></ul></section>
+    <section class="card pane"><h2 id="hGroups"></h2><ul class="blist" id="listGroups"></ul></section>
+    <section class="card pane"><h2 id="hNet"></h2><ul class="blist" id="listNet"></ul></section>
+  </aside>
 </div>
 
 <div class="tip" id="tip" role="presentation"></div>
+
+<dialog id="notes" class="notes">
+  <div class="notes-head"><h2 id="notesTitle">Notes and sources</h2><button class="act" id="bNotesClose" type="button">Close ✕</button></div>
+  <div id="notesBody"></div>
+</dialog>
+
+<dialog id="embedDlg" class="embdlg">
+  <div class="notes-head"><h2 id="embTitle"></h2><button class="act" id="embClose" type="button">✕</button></div>
+  <div id="embBody"></div>
+</dialog>
 
 <div class="dlg" id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
   <div class="dlg-card">
@@ -108,6 +181,13 @@
       <span class="file" id="fileBoundsInfo">GeoJSON areas: gives map outlines and lets places be found by name</span>
     </div>
     <div id="boundsList" class="bounds"></div>
+
+    <div class="drop" id="dropTheme">
+      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson" hidden>
+      <button class="act" id="bPickTheme" type="button">Add values by area… (optional)</button>
+      <span class="file" id="fileThemeInfo">A polygon layer, or a table of area names and values</span>
+    </div>
+    <div id="themeList" class="bounds"></div>
 
     <p class="err" id="err" hidden></p>
 

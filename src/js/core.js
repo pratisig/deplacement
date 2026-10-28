@@ -18,12 +18,13 @@ const C = {
 };
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = n => Math.round(n).toLocaleString('en-US');
+let LANG = 'en'; // 'en' | 'fr' — set from the dataset or the FR/EN button
+const fmt = n => Math.round(n).toLocaleString(LANG === 'fr' ? 'fr-FR' : 'en-US');
 /** Escape text before it goes into innerHTML. */
 const esc = s =>
   String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const dateFmt = d =>
-  d.toLocaleDateString('en-GB', {
+  d.toLocaleDateString(LANG === 'fr' ? 'fr-FR' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -32,9 +33,10 @@ const dateFmt = d =>
 
 /** Day index -> label. Falls back to "Day n" when the source has no dates. */
 function fd(day) {
-  const start = D && D.meta ? D.meta.dateStart : null;
-  if (!start) return 'Day ' + day;
-  return dateFmt(new Date(Date.parse(start + 'T00:00:00Z') + day * 86400000));
+  const meta = (D && D.meta) || {};
+  if (!meta.dateStart && meta.dateMode === 'sequence') return t('step', day + 1);
+  if (!meta.dateStart) return t('day', day);
+  return dateFmt(new Date(Date.parse(meta.dateStart + 'T00:00:00Z') + day * 86400000));
 }
 
 const cv = $('#cv'),
@@ -56,7 +58,7 @@ let blend = 0,
   playing = false,
   timer = null,
   hover = null;
-let style = 'dark',
+let style = 'light',
   provIdx = 0,
   provMsg = '',
   limitMode = 'districts';

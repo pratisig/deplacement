@@ -103,9 +103,23 @@ function zip(files, when = new Date()) {
 /* -------------------------------------------------------------- assemble */
 const page = join(root, 'index.html');
 if (!existsSync(page)) throw new Error('index.html is missing — run node build.mjs first');
+
+// the parameter help comes from the toolbox itself, so it can never drift
+execFileSync('python3', [join(root, 'tools/arcgis/build-help.py'), '--check'], {
+  cwd: root,
+  stdio: 'inherit',
+});
+
 rmSync(folder, { recursive: true, force: true });
 mkdirSync(folder, { recursive: true });
-for (const name of ['FlowMap.pyt', 'flowmap_core.py', 'README.md'])
+for (const name of [
+  'FlowMap.pyt',
+  'FlowMap.pyt.xml',
+  'FlowMap.BuildFlowMapPage.pyt.xml',
+  'flowmap_core.py',
+  'check_install.py',
+  'README.md',
+])
   copyFileSync(join(root, 'arcgis', name), join(folder, name));
 copyFileSync(page, join(folder, 'index.html'));
 
@@ -120,7 +134,16 @@ execFileSync('python3', [join(folder, 'flowmap_core.py'), 'demo', '--out', demo]
 mkdirSync(join(out, 'arcgis-demo'), { recursive: true });
 copyFileSync(demo, join(out, 'arcgis-demo', 'index.html'));
 
-const names = ['FlowMap.pyt', 'flowmap_core.py', 'index.html', 'demo.html', 'README.md'];
+const names = [
+  'FlowMap.pyt',
+  'FlowMap.pyt.xml',
+  'FlowMap.BuildFlowMapPage.pyt.xml',
+  'flowmap_core.py',
+  'check_install.py',
+  'index.html',
+  'demo.html',
+  'README.md',
+];
 const files = names.map(name => ({ name, data: readFileSync(join(folder, name)) }));
 const archive = join(out, 'FlowMap-arcgis-pro.zip');
 writeFileSync(archive, zip(files));

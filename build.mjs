@@ -37,7 +37,13 @@ const SCRIPTS = [
   'shp.js',
   'parquet.js',
   'export.js',
+  'pdf.js',
+  'menu.js',
   'ui.js',
+  'loader.js',
+  'i18n.js',
+  'panels.js',
+  'wiring.js',
 ];
 
 const payload = JSON.parse(read('data/displacement.json'));

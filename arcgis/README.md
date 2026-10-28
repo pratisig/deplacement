@@ -20,47 +20,127 @@ All three produce the same page, from the same dataset, because they share
 ### Install
 
 1. Copy this whole folder somewhere permanent, for example
-   `C:\Users\<you>\Documents\ArcGIS\FlowMap\`. It needs `FlowMap.pyt`,
-   `flowmap_core.py` and the built `index.html` side by side — that is exactly
-   what `node tools/package-arcgis.mjs` produces (`dist/arcgis-pro/`, and a zip
-   of the same).
+   `C:\Users\<you>\Documents\ArcGIS\FlowMap\`. It needs, side by side:
+
+   | File | What it is |
+   | --- | --- |
+   | `FlowMap.pyt` | the toolbox |
+   | `flowmap_core.py` | the engine — **replace it at the same time as the `.pyt`** |
+   | `FlowMap.pyt.xml` | the toolbox description |
+   | `FlowMap.BuildFlowMapPage.pyt.xml` | the help behind every (i) button |
+   | `index.html` | the page template the tool fills |
+   | `check_install.py` | the doctor, if something goes wrong |
+
+   That is exactly what `node tools/package-arcgis.mjs` produces
+   (`dist/arcgis-pro/`, and a zip of the same).
 2. In ArcGIS Pro: **Insert → Toolbox → Add Toolbox…** and pick `FlowMap.pyt`.
+   If an older FlowMap toolbox is already open, **remove it first** (right-click
+   → *Remove*): an old folder left on the machine can otherwise supply an old
+   engine.
 3. Open **Flow map → Build a flow map page**.
 
 The tool writes one HTML file. Double-click it, or tick *Open the page when it
 is written*.
 
-### Parameters
+### Parameters — 28, and only two are required
 
-**1 · Input**
+The ten fields facing you, in this order: the table, the output folder, the page
+name, then the six columns. Everything else is folded into three collapsible
+groups.
 
-| Parameter | Notes |
-| --- | --- |
-| Flow table or layer | A table, a geodatabase table, a CSV in the project, or a feature layer |
-| Output page (HTML) | Where the page goes |
-| Places to look names up | Optional point layer: gives every name a position |
-| Name field in the places layer | Matches the flow table's names |
-| Group field in the places layer | Optional: colours and groups the dots |
+| Parameter | Required | What it is |
+| --- | --- | --- |
+| Flow table or layer | **yes** | A layer, a feature class, a standalone table, a CSV, a JSON or a GeoJSON layer |
+| Output folder | **yes** | Browse to it. `index.html` is written inside, or the page name below |
+| Page file name | no | Default `index.html`; a name without `.html` gets it added |
+| Origin / Destination name field | no | A place name. Not needed when there are coordinates, or a places/outlines layer |
+| Value field | no | The quantity to draw. Must hold numbers; empty counts 1 |
+| Date or day field | no | Drives the animation |
+| Origin / Destination longitude, latitude | no | Degrees, WGS84 |
 
-**2 · Outlines**
+*Places and outlines*: places layer + its name and group columns, detailed and
+coarse outlines + their name columns.
 
-| Parameter | Notes |
-| --- | --- |
-| Detailed outlines | Optional polygons, drawn under everything (districts, communes) |
-| Name field in the outlines | Lets a name in the table be found on the map |
-| Coarse outlines | Optional second polygon layer (provinces, regions) |
-| Outline detail in degrees | Douglas–Peucker tolerance; 0 keeps every vertex. 0.001° ≈ 110 m, 0.01° ≈ 1.1 km |
+*Text on the page*: open when done, title, subtitle, unit, dot label, group
+label, source note. Unit and labels are deduced when left empty.
 
-**3 · Columns** — Origin name (required), Destination name (required), Value
-(default 1), Date or day number, Origin/Destination group, Origin/Destination
-longitude and latitude. The tool guesses these from the column names on the
-first run; change anything it got wrong.
+*More options*: add the flows to the map for the Time Slider, page template,
+dataset JSON.
 
-**4 · Text on the page** — Title, Subtitle, Unit, *What one dot is called*,
-*What a group is called*, Source note.
+**Every column parameter is a drop-down of the table's own columns.** Not a
+text box, not Pro's field control. A filter's *type* and its *list* are two
+different things in Pro, and it puts the type back to "Any" when the list is
+replaced while empty — a parameter whose type is "Any" is drawn as a text box
+however good its list is. So the type is re-asserted after every list change,
+and verified: `check_install.py` prints `drop-down (8)` or `TEXT BOX` for each
+column parameter, in your copy of Pro. The list is filled when you choose the table,
+refilled when you change it, and filled again when the pane is reopened on the
+values of the previous run.
 
-**5 · Output** — *Also write the dataset (JSON)* for reuse elsewhere, and
-*Open the page when it is written*.
+**The columns are read through every door at once, because no single one is
+always open.** A parameter in a Python toolbox offers two things and not always
+both: the name written in the box (`valueAsText`) and the layer or table behind
+it (`value`). A pane reopened on the last run's values can show the name with
+nothing behind it; a layer object that `ListFields` accepts in one Pro build is
+an error in the next. So each dataset is tried as the text in the box, then as
+the name the object reports, then as the object, then as its data source — and
+each of those is read with `ListFields`, with the fields a cursor reports (the
+same door the rows come through, so anything readable is listable), with
+`Describe().fields`, and, for a layer added from JSON or GeoJSON, from the file
+itself (*"CIMPath=Map/_name_.json"* is the usual case). A failed read is never
+remembered: the cache only keeps an answer that had columns in it, so the next
+callback can succeed where the last one could not.
+
+**A reopened pane fills its lists.** Pro does not promise to call
+`updateParameters` when the tool is opened again on an earlier run's values —
+and that is the failure this fills: the table written in the box, twelve lists
+still holding *"(choose the flow table or layer first)"*. `initializeParameters`
+therefore refreshes all twelve when the pane opens, without choosing anything
+for you. If the columns still cannot be read, the table parameter says so.
+
+**A column list is never empty, even before a table is chosen.** An empty value
+list is drawn as a plain text box, so before the table exists each list holds a
+placeholder instead — *(choose the flow table or layer first)*, *(choose the
+places layer first)*, *(choose the outline layer first)*, or *(no column could
+be read from this table)* when a table is chosen but Pro returns no field for
+it. The twelve drop-downs are therefore drop-downs from the moment the pane is
+drawn, and their arrow is always there. A placeholder is recognised for what it
+is at every point where a column is read, so it can never be sent to a cursor as
+a field name, and a column the new table does not have is dropped rather than
+sent on. The parameters stay enabled for the same reason: Pro draws the arrow of
+an enabled value list.
+
+**If Pro ever refuses a list, the pane says so.** Some builds rebuild a
+parameter between two callbacks and put its filter type back to `Any`, which is
+the one way this can still become a text box. The type and the list are
+therefore re-asserted at the end of *every* callback — `getParameterInfo`,
+`updateParameters`, `updateMessages` — and if one still cannot be made a list,
+the table parameter carries a warning naming it, instead of leaving a box for
+you to fill by hand.
+
+**No column field is ever filled in for you.** Choosing the table fills the
+*twelve lists* with its columns and leaves every field empty: the choice is
+yours to make, and a guess is invisible, so a wrong guess reads as your own
+decision. (That is how a run once went out with the destination's name on both
+ends of every flow.) A column you pick is never replaced by a later guess.
+
+What the tool does instead is **read your choice and say what it means**: it
+samples 200 rows and judges the content, so a column of identifiers is reported
+as a place name, a text column is reported as a value, coordinates in metres are
+reported as not being degrees, and a date column that holds no date is reported
+as such. What it finds appears under the parameter while the dialog is open —
+*The value column "CSI_CASE" holds no number that can be read (examples:
+"CSI-001", "CSI-014")* — and is repeated as warnings if a build fails.
+
+**Nothing chosen yet is not an error.** Choosing a table and pressing Run
+without picking a column says which columns are missing and where they are,
+instead of "the table has no data rows"; the pane shows the same thing as a
+warning. A point layer needs no column at all: its geometry is the position.
+
+**Coordinates are checked against the numbers.** If the column called
+longitude holds what are plainly latitudes, the tool says so and swaps them
+(`The destination longitude and latitude were read the wrong way round`), so a
+mislabeled export cannot silently draw a map of the wrong hemisphere.
 
 ### What the page does with the table
 
@@ -70,8 +150,12 @@ first run; change anything it got wrong.
   are matched against the places layer, then the outline layers: accents, case,
   punctuation and decorations are ignored, so *Ségou*, *SEGOU* and
   *Koutiala (Sikasso)* all find their feature.
-- **The time axis.** Dates become whole days counted from the earliest one, so
-  day 0 is the first day of the record and the slider drives a real timeline.
+- **The time axis.** With a date column, dates become whole days counted from
+  the earliest one, so day 0 is the first day of the record and the slider
+  drives a real timeline. **Without a date column**, the rows' own order becomes
+  a short axis of *steps*: the flows appear one after another, the slider and
+  Play do something, and the label says `Step 4` rather than pretending to know
+  a date.
   ISO (`2026-01-04`), day-first (`31/01/2026`) and month-first (`01/04/2026`
   = 4 January) are all read, plus a column of plain numbers as day numbers.
   Unreadable dates are reported and treated as the first day.
@@ -79,10 +163,30 @@ first run; change anything it got wrong.
   name — in its own column, in the places layer, or inherited from the row —
   wins. A city that appears in ten rows is one dot, not ten.
 - **Values.** A row with a value of 0, or a name that cannot be located, is
-  dropped — and reported as a warning, never silently.
+  dropped — and reported as a warning, never silently. A value column with no
+  number at all stops the build before it starts, naming the column.
 - **One-place rows.** A point layer is a table of places, not of pairs: each row
   becomes a record *within* that place (the "inside" column of the page's
   table).
+- **What the page says when there is no line.** A table with one point per row
+  has no movement to draw, and the page says so in its subtitle — the
+  households counted *inside* each place travel round that place's ring —
+  instead of promising "each line a flow" over a field of dots.
+- **One name, two coordinate pairs.** A table with a single name column and two
+  coordinate pairs is best given an empty *Origin name field*: that end keeps its
+  own position and is labelled by it, and the flow stays a line between two
+  places. Putting the same column in both name fields also works — the two
+  positions must differ for the line to exist. What must not happen is one dot
+  standing for both ends: the page would then count records inside a place
+  instead of drawing movement.
+- **When the two ends really are one point.** If the origin and destination
+  coordinates match in every row, the page has no line to draw. It says so:
+  the tool warns with the two column pairs by name, the dialog shows the same
+  warning next to the coordinate fields, and the page repeats it under the map.
+- **Which build made the page.** The tool is labelled `Build a flow map page
+  (6.9)`, each run opens with `FlowMap 6.9 - engine 6.9`, and the page's source
+  line ends with `Built with FlowMap 6.9`. A toolbox left beside an older
+  `flowmap_core.py` refuses to run rather than build the old page silently.
 
 ### Recipes
 
@@ -98,15 +202,39 @@ The longitude/latitude parameters are disabled and the geometry is used.
 
 **Longitude/latitude columns.** Map Origin longitude/origin latitude (and,
 if the table has them, destination longitude/latitude). No outlines are needed,
-though they make the map readable.
+though they make the map readable. This is the shape of the table that failed
+once: `Village`, `CSI_CASE`, `MILDA_distribuees`, `Lon_dept`, `Lat_dept`,
+`Longitude_rep`, `Latitude_rep` — the tool picks the village column, refuses
+`CSI_CASE` as a value and counts `MILDA_distribuees`, and pairs the two
+coordinate sets the right way round.
 
 ### Size
 
 Boundaries and places travel inside the page. A district layer with 400
-features and 50 000 vertices is about 1 MB of the page; *Outline detail in
-degrees* at 0.005 usually cuts that by more than half with no visible loss.
-The page draws well with a few thousand places and a few hundred thousand
-flows; beyond that, aggregate the table first.
+features and 50 000 vertices is about 1 MB of the page; the tool picks the
+outline detail itself from the amount of geometry (0.005° to 0.02°), which
+usually halves that with no visible loss. The page draws well with a few
+thousand places and a few hundred thousand flows; beyond that, aggregate the
+table first.
+
+### The animation, inside Pro as well
+
+*Add the flows to the map, ready for the Time Slider* (on by default) makes the
+same run do a second thing:
+
+- a line feature class is written to `FlowMap.gdb` in the output folder, with
+  `DAY`, `WHEN`, `ORIGIN`, `DESTINATION` and `VALUE` fields;
+- it is added to the active map, time is turned on with `WHEN` as the start
+  field, and `FlowMap-flows.lyrx` is saved next to the page.
+
+Then open the **Time Slider** on the map and press play: the animation plays
+on your own map, with your basemap and your layout, and the **Animation** tab
+exports it as a video. A Python toolbox cannot draw in the map, so this is the
+route that puts the animation there rather than in a browser.
+
+If the layer cannot be added (no project open, or a build without the time
+API), the page is still written — the tool warns and says which field to pick
+by hand in *Layer Properties → Time*. Nothing else is lost.
 
 ---
 
@@ -124,7 +252,7 @@ node tools/render-map.mjs --html demo.html --out docs/arcgis-demo.png
 # a page from a spec file
 python3 flowmap_core.py build --input spec.json --out page.html --json dataset.json
 
-# the checks (28 of them, no dependencies)
+# the checks (59 of them, no dependencies)
 python3 flowmap_core.py selftest
 ```
 
@@ -194,19 +322,41 @@ tested.
 
 `npm test` runs `test/arcgis.test.mjs`, which:
 
-- runs `flowmap_core.py selftest` (29 checks: names, dates, geometry, the
-  dataset, the page);
+- runs `flowmap_core.py selftest` (59 checks: names, dates, geometry, the
+  dataset, the page, and what a column holds — identifiers, metres, readable
+  dates, the swapped coordinate pair);
 - drives `FlowMap.pyt` through a stand-in for arcpy (`tools/arcgis/arcpy_stub.py`,
-  `tools/arcgis/toolcheck.py`, 41 checks): parameter wiring, field guessing,
-  cursors, geometry parts, the WGS84 request, messages and warnings, the two
-  failure paths;
+  `tools/arcgis/toolcheck.py`, 157 checks): the 28 parameters, the column
+  drop-downs (a placeholder before any table, the table's own columns after,
+  a filter Pro reset to "Any" repaired on the next callback, a placeholder
+  never read as a field, no field filled in automatically, a pane reopened on
+  the last run's values filling all twelve lists, a host that refuses a layer
+  object and a host with no `ListFields` and no `Describe` still getting their
+  lists from the name and from a cursor, and a clear message when Run is
+  pressed with nothing chosen), the lists including a JSON layer, the folder and
+  page name, the fields offered but never filled in, the
+  old table that failed in the field, the swap of two mislabeled coordinate
+  columns, cursors, geometry parts, the WGS84 request, messages and warnings,
+  the animation layer (feature class, fields, one line per flow, dates, time
+  enabled, `.lyrx`), a new toolbox left beside an old engine, and every failure
+  path;
+- checks the pane itself (`tools/arcgis/dialogcheck.py`, 467 checks): on a
+  feature table, a standalone table, a point layer, a shapefile and a layer
+  added from JSON, every column parameter is a value list, holds the columns
+  of the dataset chosen above it, follows the dataset when it changes, drops a
+  column the new table lacks, fills itself when the dialog is reopened
+  (`updateMessages` alone, `initializeParameters` on open, and a box that holds
+  nothing but the dataset's name), keeps its type as a value list when Pro resets it
+  or rebuilds it from an empty list, and accepts every item clicked in it;
+- checks the installation itself (`arcgis/check_install.py --stub tools/arcgis`,
+  28 checks) and that the help XML matches the toolbox
+  (`python3 tools/arcgis/build-help.py --check`);
 - loads the page the toolbox wrote in the project's own browser harness and
   compares it, number for number, with the dataset the toolbox reported.
 
 What that cannot do is run real ArcGIS Pro: the stand-in follows the documented
 arcpy API, so **a first run on your machine is still the acceptance test**.
-Things worth a look on that first run: your field names against the guessed
-mapping, the group field if your table has one, and the outline detail if the
+Things worth a look on that first run: the columns you picked, the group field if your table has one, and the outline detail if the
 page feels heavy.
 
 ## Known limitations

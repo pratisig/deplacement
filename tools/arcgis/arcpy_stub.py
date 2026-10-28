@@ -21,8 +21,36 @@ class ExecuteError(Exception):
 
 
 class _Filter(object):
+    """A parameter filter, as Pro behaves rather than as the docs describe.
+
+    Pro keeps the *type* and the *list* separately, and puts the type back to
+    "Any" when the list is replaced while it is empty; a parameter whose type
+    is "Any" is drawn as a text box however good its list is. That behaviour is
+    the one that turned six drop-downs into six empty boxes, so it is emulated
+    here rather than smoothed over.
+    """
+
     def __init__(self):
-        self.list = []
+        self._list = []
+        self._type = "Any"
+
+    @property
+    def list(self):
+        return self._list
+
+    @list.setter
+    def list(self, items):
+        self._list = list(items or [])
+        if not self._list:
+            self._type = "Any"
+
+    @property
+    def type(self):
+        return self._type
+
+    @type.setter
+    def type(self, value):
+        self._type = "Any" if (str(value) == "ValueList" and not self._list) else value
 
 
 class Parameter(object):
@@ -40,9 +68,16 @@ class Parameter(object):
         self.enabled = True
         self.errorMessage = None
         self.warningMessage = None
+        # A pane reopened on the previous run keeps the name in the box and
+        # nothing behind it: this is that state, and it is what the dialog
+        # tests use instead of a layer object.
+        self.text_only = False
+        self.shown_text = None
 
     @property
     def valueAsText(self):
+        if self.text_only:
+            return self.shown_text
         if self.value is None:
             return None
         if isinstance(self.value, bool):
@@ -91,10 +126,21 @@ class _Desc(object):
 
 class _Cursor(object):
     def __init__(self, layer, fields, where_clause=None, spatial_reference=None, **extra):
+        if STRICT_TEXT and not isinstance(layer, str):
+            raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
         CURSOR_CALLS.append((str(layer), tuple(str(f) for f in fields), spatial_reference))
         table = TABLES.get(str(layer))
         if table is None:
             raise ExecuteError("The stand-in has no table for %s" % layer)
+        if fields == "*" or fields == ["*"] or fields == ("*",):
+            # real arcpy: an asterisk asks for every field, and cursor.fields
+            # then reports them - the way a layer Pro cannot describe is
+            # still listed
+            self.fields = list(table["fields"])
+            if table.get("shapeType"):
+                self.fields.append("SHAPE@")
+            self.rows = [[row.get(f) for f in self.fields] for row in table["rows"]]
+            return
         self.fields = ["SHAPE@" if str(f).lower() == "shape@" else f for f in fields]
         self.rows = [
             [row["SHAPE@"] if f == "SHAPE@" else row.get(f) for f in self.fields] for row in table["rows"]
@@ -115,12 +161,27 @@ class _Da(object):
     def SearchCursor(layer, fields, where_clause=None, spatial_reference=None):
         return _Cursor(layer, fields, where_clause, spatial_reference)
 
+    @staticmethod
+    def InsertCursor(table, fields):
+        return _InsertCursor(table, fields)
+
 
 class _Env(object):
     workspace = None
 
 
+# How fussy the host is, to reproduce what a real Pro build does and does not
+# accept. All false by default; the checks turn them on one at a time.
+STRICT_TEXT = False      # ListFields, Describe and cursors refuse an object
+NO_LISTFIELDS = False    # ListFields always fails
+NO_DESCRIBE = False      # Describe always fails
+
+
 def ListFields(layer):
+    if NO_LISTFIELDS:
+        raise ExecuteError("ListFields is not available here")
+    if STRICT_TEXT and not isinstance(layer, str):
+        raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
     table = TABLES.get(str(layer))
     if table is None:
         raise ExecuteError("The stand-in has no table for %s" % layer)
@@ -128,6 +189,10 @@ def ListFields(layer):
 
 
 def Describe(layer):
+    if NO_DESCRIBE:
+        raise ExecuteError("Describe is not available here")
+    if STRICT_TEXT and not isinstance(layer, str):
+        raise ExecuteError("Object: expected a dataset name, got %r" % (layer,))
     table = TABLES.get(str(layer))
     if table is None:
         raise ExecuteError("The stand-in has no table for %s" % layer)
@@ -170,19 +235,24 @@ def SetParameterAsText(index, value):
 
 
 class Messages(object):
-    """The object ArcGIS hands to execute() — addMessage/addWarningText."""
+    """The object ArcGIS hands to execute().
+
+    Only the three methods Pro really has, and nothing else: this class used
+    to offer ``addWarningText`` (which does not exist in arcpy) because the
+    toolbox called it, so a whole build shipped with a warning path that
+    raised ``AttributeError: MessagesObject: Get attribute: s does not exist``
+    the first time real data produced a warning. An attribute that is not in
+    the real API raises here too, and the test fails before the user does.
+    """
 
     def addMessage(self, line):
         AddMessage(line)
 
-    def addWarningText(self, line):
+    def addWarningMessage(self, line):
         AddWarning(line)
 
     def addErrorMessage(self, line):
         AddError(line)
-
-    def addWarning(self, line):
-        AddWarning(line)
 
 
 def add_layer(name, fields, rows, shape_type=None):
@@ -190,7 +260,12 @@ def add_layer(name, fields, rows, shape_type=None):
 
 
 def reset():
+    global STRICT_TEXT, NO_LISTFIELDS, NO_DESCRIBE
+    STRICT_TEXT = False
+    NO_LISTFIELDS = False
+    NO_DESCRIBE = False
     TABLES.clear()
+    reset_animation()
     CURSOR_CALLS[:] = []
     MESSAGES[:] = []
     WARNINGS[:] = []
@@ -200,3 +275,166 @@ def reset():
 
 da = _Da
 env = _Env()
+
+
+# ---------------------------------------------------------------- geometry
+#
+# Enough of the geometry and editing API for the animation layer: a point, an
+# array, a polyline, an insert cursor, a geodatabase and a map with time.
+# Everything is recorded, so a test can check what the toolbox asked for.
+
+
+class Array(list):
+    def __init__(self, items=None):
+        list.__init__(self, list(items or []))
+
+    def add(self, item):
+        self.append(item)
+
+
+class Polyline(object):
+    def __init__(self, points=None, spatial_reference=None):
+        self.points = list(points or [])
+        self.spatial_reference = spatial_reference
+        self.firstPoint = self.points[0] if self.points else None
+
+    def __iter__(self):
+        return iter([self.points])
+
+
+CREATED = {}
+FIELDS = {}
+INSERTED = {}
+LAYER_FILES = []
+CALLS = []
+MP_PROJECT = False
+
+
+def _call(name, *args, **kwargs):
+    CALLS.append((name, args, tuple(sorted(kwargs.items()))))
+
+
+class _Management(object):
+    """management.* as used by the toolbox, recording what it was asked."""
+
+    @staticmethod
+    def CreateFileGDB(folder, name):
+        _call("CreateFileGDB", folder, name)
+        path = folder.rstrip("/\\") + "/" + name
+        CREATED[path] = "gdb"
+        return path
+
+    @staticmethod
+    def CreateFeatureclass(gdb, name, shape_type, spatial_reference=None):
+        _call("CreateFeatureclass", gdb, name, shape_type, spatial_reference=spatial_reference)
+        path = gdb.rstrip("/\\") + "/" + name
+        CREATED[path] = "featureclass"
+        FIELDS.setdefault(path, [])
+        return path
+
+    @staticmethod
+    def AddField(table, name, kind, field_length=None):
+        _call("AddField", table, name, kind, field_length=field_length)
+        FIELDS.setdefault(table, []).append(name)
+        return table
+
+    @staticmethod
+    def Delete(path):
+        _call("Delete", path)
+        CREATED.pop(path, None)
+
+    @staticmethod
+    def SaveToLayerFile(layer, out_layer, is_relative_path=None):
+        _call("SaveToLayerFile", out_layer)
+        LAYER_FILES.append(out_layer)
+        return out_layer
+
+
+management = _Management()
+
+
+def Exists(path):
+    return str(path) in CREATED
+
+
+class _InsertCursor(object):
+    def __init__(self, table, fields):
+        self.table = str(table)
+        self.fields = list(fields)
+        INSERTED.setdefault(self.table, [])
+
+    def insertRow(self, row):
+        INSERTED[self.table].append(list(row))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _Time(object):
+    def __init__(self):
+        self.enabled = False
+        self.startTimeFieldName = None
+        self.endTimeFieldName = None
+
+
+class _Layer(object):
+    def __init__(self, path):
+        self.name = str(path).rstrip("/\\").split("/")[-1]
+        self.path = str(path)
+        # what a real Pro layer answers about itself
+        self.dataSource = str(path)
+        self.catalogPath = str(path)
+        self.time = _Time()
+        self.enable_time_calls = []
+
+    def enableTime(self, *args, **kwargs):
+        self.enable_time_calls.append((args, kwargs))
+        self.time.enabled = True
+
+
+class _Map(object):
+    def __init__(self):
+        self.layers = []
+
+    def addDataFromPath(self, path):
+        layer = _Layer(path)
+        self.layers.append(layer)
+        return layer
+
+
+class _Project(object):
+    def __init__(self):
+        self.activeMap = _Map()
+        self.homeFolder = None
+        self.filePath = None
+
+    def listMaps(self):
+        return [self.activeMap] if self.activeMap else []
+
+
+class _Mp(object):
+    project = None
+
+    @staticmethod
+    def ArcGISProject(name):
+        if not MP_PROJECT:
+            raise RuntimeError("no ArcGIS Pro project is open")
+        if _Mp.project is None:
+            _Mp.project = _Project()
+        return _Mp.project
+
+
+mp = _Mp()
+
+
+def reset_animation():
+    """Forget what the animation tests did."""
+    CREATED.clear()
+    FIELDS.clear()
+    INSERTED.clear()
+    LAYER_FILES[:] = []
+    CALLS[:] = []
+    _Mp.project = None

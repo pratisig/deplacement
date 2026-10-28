@@ -17,8 +17,8 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
 import { Canvas } from './png.mjs';
+import { loadPage } from '../test/harness.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -35,93 +35,12 @@ const htmlPath =
 const WIDTH = 1150,
   HEIGHT = 713;
 
-/* Run every script block in document order, exactly as a browser would: a
-   page that came out of an export — or out of the ArcGIS toolbox — carries
-   its dataset in a block ahead of the app. Then reuse the page's own
-   projection and paths, which is what makes this a real alignment check. */
-const html = readFileSync(htmlPath, 'utf8');
-const script = html
-  .match(/<script[^>]*>[\s\S]*?<\/script>/g)
-  .map(block => block.replace(/^<script[^>]*>|<\/script>$/g, ''))
-  .join('\n;\n');
-
-const ctxStub = new Proxy(
-  { measureText: () => ({ width: 40 }), setLineDash() {} },
-  {
-    get: (t, k) => (k in t ? t[k] : () => {}),
-    set: () => true,
-  },
-);
-const listeners = {};
-const element = id => ({
-  id,
-  style: {},
-  hidden: false,
-  value: '280',
-  max: 280,
-  innerHTML: '',
-  textContent: '',
-  clientWidth: WIDTH,
-  clientHeight: HEIGHT,
-  offsetWidth: 120,
-  offsetHeight: 60,
-  addEventListener(k, f) {
-    (listeners[id] = listeners[id] || {})[k] = f;
-  },
-  setAttribute() {},
-  getAttribute() {},
-  getBoundingClientRect: () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT }),
-  getContext: () => ctxStub,
-});
-const els = {};
-const sandbox = {
-  document: {
-    documentElement: { style: {} },
-    querySelector: s =>
-      els[s.replace('#', '')] || (els[s.replace('#', '')] = element(s.replace('#', ''))),
-  },
-  window: { devicePixelRatio: 2, innerWidth: WIDTH, innerHeight: HEIGHT },
-  getComputedStyle: () => ({
-    getPropertyValue: k =>
-      ({
-        '--bg': '#07090c',
-        '--ink': '#e6edf3',
-        '--edge': '#d9a066',
-        '--spark': '#ffeccb',
-        '--recv': '#3987e5',
-        '--send': '#d95926',
-        '--bal': '#b4c0cb',
-        '--muted': '#93a4b3',
-      })[k] || '#000',
-  }),
-  matchMedia: () => ({ matches: true }), // reduced motion: draw one frame
-  Image: class {
-    set src(v) {
-      this._src = v;
-    }
-    get src() {
-      return this._src;
-    }
-  },
-  requestAnimationFrame: () => 0,
-  setTimeout: () => 0,
-  setInterval: () => 0,
-  clearInterval: () => {},
-  addEventListener() {},
-  innerWidth: WIDTH,
-  innerHeight: HEIGHT,
-  console: { log() {}, warn() {}, error() {} },
-};
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(
-  script +
-    ';globalThis.__T={MAP:()=>MAP,mercX,mercY,project,size,B:()=>B,N:()=>N,D:()=>D,EXAMPLE,' +
-    'GOVPATH:()=>GOVPATH,DISTPATH:()=>DISTPATH,PROV,STYLE,loadSource,' +
-    'chainOf:s=>STYLE[s].chain};',
-  sandbox,
-);
-const T = sandbox.__T;
+/* Load the page exactly as the test suite does: a stubbed DOM, canvas and
+   image loader, the real app code. Then reuse the page's own projection and
+   paths, which is what makes this a real alignment check. */
+const page = loadPage({ html: readFileSync(htmlPath, 'utf8'), reducedMotion: true });
+const T = page.T;
+if (!T.D().nodes.length) T.loadSource(T.EXAMPLE); // a page with no data of its own
 if (!T.D().nodes.length) T.loadSource(T.EXAMPLE); // a page with no data of its own
 const MAP = T.MAP();
 
@@ -181,14 +100,89 @@ for (const { rings } of Object.values(T.GOVPATH())) {
   }
 }
 
-/* ------------------------------------------------------- points and labels */
+/* --------------------------------------------------------------- the flows
+   The page draws a flow as a curved line from one place to another; a flow
+   from a place to itself is drawn as a small loop beside its dot, because a
+   curve between one point and itself has no length. Both are drawn here with
+   the page's own aggregation (T.getLinks()), so a dataset whose flows have
+   collapsed - the bug that made a page look empty - shows up as zero lines. */
+const links = T.getLinks();
+for (const l of links) {
+  const sx = px(l.source.lon),
+    sy = py(l.source.lat),
+    ex = px(l.target.lon),
+    ey = py(l.target.lat);
+  const w = Math.min(3.2, 0.4 + Math.sqrt(l.w) * 0.1);
+  if (l.source === l.target || (Math.abs(sx - ex) < 0.5 && Math.abs(sy - ey) < 0.5)) {
+    const r = 7 + Math.min(8, Math.sqrt(l.w) * 1.6);
+    for (let a = 0; a < 360; a += 8) {
+      const t0 = (a * Math.PI) / 180,
+        t1 = ((a + 8) * Math.PI) / 180;
+      canvas.line(
+        sx + r * 0.7 + r * Math.cos(t0),
+        sy - r * 0.7 + r * Math.sin(t0),
+        sx + r * 0.7 + r * Math.cos(t1),
+        sy - r * 0.7 + r * Math.sin(t1),
+        [217, 160, 102],
+        Math.min(0.9, 0.3 + Math.sqrt(l.w) * 0.08),
+      );
+    }
+    continue;
+  }
+  const dx = ex - sx,
+    dy = ey - sy;
+  const cx = (sx + ex) / 2 - dy * 0.18,
+    cy = (sy + ey) / 2 + dx * 0.18;
+  const steps = 24;
+  for (let i = 0; i < steps; i++) {
+    const u0 = i / steps,
+      u1 = (i + 1) / steps;
+    const q = u => [
+      (1 - u) * (1 - u) * sx + 2 * (1 - u) * u * cx + u * u * ex,
+      (1 - u) * (1 - u) * sy + 2 * (1 - u) * u * cy + u * u * ey,
+    ];
+    const a = q(u0),
+      b = q(u1);
+    canvas.line(
+      a[0],
+      a[1],
+      b[0],
+      b[1],
+      [217, 160, 102],
+      Math.min(0.85, 0.25 + Math.sqrt(l.w) * 0.09),
+    );
+  }
+}
+
+/* ------------------------------------------------------- points and labels
+   A table with one point per row has no line to draw: its records are counted
+   inside each place, and the page shows them travelling round the dot's ring.
+   Drawing that ring here is what makes such a page visible in this check at
+   all - "flows: 0" with nothing else looked like a failure. */
 let placed = 0;
+let rings = 0;
 for (const n of T.N()) {
   const x = px(n.lon),
     y = py(n.lat);
   canvas.disc(x, y, 3, [57, 135, 229], 1);
   canvas.disc(x, y, 1.6, [220, 240, 255], 1);
   placed++;
+  if (n.within > 0) {
+    rings++;
+    const r = 6.2;
+    for (let a = 0; a < 360; a += 10) {
+      const t0 = (a * Math.PI) / 180,
+        t1 = ((a + 10) * Math.PI) / 180;
+      canvas.line(
+        x + r * Math.cos(t0),
+        y + r * Math.sin(t0),
+        x + r * Math.cos(t1),
+        y + r * Math.sin(t1),
+        [255, 236, 203],
+        0.7,
+      );
+    }
+  }
 }
 
 const report = {
@@ -198,6 +192,8 @@ const report = {
   districts: Object.keys(T.DISTPATH()).length,
   governorates: Object.keys(T.GOVPATH()).length,
   points: placed,
+  flows: links.length,
+  rings,
   frame: {
     x: [Math.min(...T.N().map(n => px(n.lon))), Math.max(...T.N().map(n => px(n.lon)))].map(
       Math.round,

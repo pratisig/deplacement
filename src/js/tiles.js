@@ -98,21 +98,51 @@ function tileFor(p, z, x, y) {
   const key = p + '|' + z + '|' + x + '|' + y;
   let e = TILES.get(key);
   if (e) return e;
-  e = { img: new Image(), ok: false, err: false };
+  e = { img: null, ok: false, err: false, tainted: false };
   TILES.set(key, e);
-  e.img.onload = () => {
-    e.ok = true;
-    PSTAT[p].ok++;
-    if (RM) draw(0);
+  const url = PROV[p].u(z, x, y);
+  // First with CORS: a tile loaded that way never blocks reading the canvas
+  // back, which is what GIF, video and PDF export need. A server that sends
+  // no CORS header is retried as a plain image: it still shows on screen, but
+  // is marked `tainted` so exports leave it out instead of failing.
+  const load = cors => {
+    const img = new Image();
+    if (cors) img.crossOrigin = 'anonymous';
+    e.img = img;
+    img.onload = () => {
+      e.ok = true;
+      e.tainted = !cors;
+      PSTAT[p].ok++;
+      if (RM) draw(0);
+    };
+    img.onerror = () => {
+      if (cors) return load(false);
+      e.err = true;
+      PSTAT[p].err++;
+      providerFailed(p);
+      if (RM) draw(0);
+    };
+    img.src = url;
   };
-  e.img.onerror = () => {
-    e.err = true;
-    PSTAT[p].err++;
-    providerFailed(p);
-    if (RM) draw(0);
-  };
-  e.img.src = PROV[p].u(z, x, y);
+  load(true);
   return e;
+}
+let NOTAINT = false; // true while exporting: tiles that would block read-back are skipped
+function pendingTiles() {
+  const prefix = curProv() + '|' + MAP.z + '|';
+  let n = 0;
+  for (const [key, e] of TILES) if (key.startsWith(prefix) && !e.ok && !e.err) n++;
+  return n;
+}
+function waitForTiles(ms = 7000) {
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    const check = () => {
+      if (pendingTiles() === 0 || performance.now() - t0 > ms) return resolve();
+      setTimeout(check, 120);
+    };
+    check();
+  });
 }
 function providerFailed(p) {
   const st = PSTAT[p];
@@ -124,10 +154,10 @@ function providerFailed(p) {
   if (i < 0 || i < provIdx) return; // already moved past this one
   if (i + 1 < chain.length) {
     provIdx = i + 1;
-    provMsg = PROV[p].n + ' would not serve tiles — switched to ' + PROV[chain[i + 1]].n;
+    provMsg = t('provSwitched', PROV[p].n, PROV[chain[i + 1]].n);
   } else {
     provIdx = chain.length;
-    provMsg = PROV[p].n + ' would not serve tiles — showing boundaries only';
+    provMsg = t('provNone', PROV[p].n);
   }
   updateStatus();
 }
@@ -148,7 +178,7 @@ function drawBasemap(alpha = 1) {
   for (let ty = y0; ty <= y1; ty++)
     for (let tx = x0; tx <= x1; tx++) {
       const e = tileFor(p, z, tx, ty);
-      if (e.ok) ctx.drawImage(e.img, cx(tx), cy(ty), size, size);
+      if (e.ok && !(NOTAINT && e.tainted)) ctx.drawImage(e.img, cx(tx), cy(ty), size, size);
     }
   ctx.filter = 'none';
   if (st.overlay) {
@@ -164,24 +194,23 @@ function updateStatus() {
   let s;
   const hasLimits = Boolean(D.admin1 || D.admin2);
   if (blend > 0.6) {
-    s =
-      'Network layout — the map is hidden. Drag the layout slider back towards Geo to see it again.';
-    if (hasLimits) s += ' Loaded limits: ' + limitLayers().length + '.';
+    s = t('bmNetwork');
+    if (hasLimits) s += t('bmLoadedLimits') + limitLayers().length + '.';
   } else if (style === 'none') {
-    s =
-      'No background map — places sit on their true coordinates' +
-      (hasLimits ? ', with the administrative limits drawn.' : '.');
+    s = t('bmNone', hasLimits);
   } else if (!p) {
-    s =
-      'No background map available — places are still placed on their true coordinates. <span class="warn">' +
-      provMsg +
-      '</span>';
+    s = t('bmNoProv') + '<span class="warn">' + provMsg + '</span>';
   } else {
     s =
-      'Background: <b>' +
+      t('bmBackground') +
+      '<b>' +
       PROV[p].n +
-      '</b> — public tiles, no API key, no sign-up.' +
+      '</b>' +
+      t('bmPublic') +
       (provMsg ? ' <span class="warn">' + provMsg + '</span>' : '');
   }
+  const loops = typeof E !== 'undefined' && E ? E.filter(e => e[1] === e[2]).length : 0;
+  if (loops && typeof E !== 'undefined' && loops === E.length)
+    s += ' <span class="warn">' + t('bmLoops') + '</span>';
   $('#bm').innerHTML = s;
 }

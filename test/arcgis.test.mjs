@@ -98,7 +98,7 @@ test('the page the toolbox wrote boots with exactly that dataset', { skip: !pyth
   assert.equal(D.total, facts.total, 'total');
   assert.equal(D.meta.title, facts.meta.title);
   assert.equal(page.els.title.textContent, facts.meta.title);
-  assert.equal(page.els.lgUnit.textContent, 'households');
+  assert.match(page.els.stats.innerHTML, /households/, 'the unit the tool set is on the page');
   assert.equal(page.T.get().upTo, D.maxDay, 'the slider starts on the last day');
   const slider = page.els.sl;
   assert.equal(Number(slider.max), facts.maxDay, 'the slider reaches the last day');
@@ -142,7 +142,7 @@ test('the core also builds a page from a plain spec file', { skip: !python }, ()
   assert.equal(D.meta.nodeLabel, 'district');
   assert.equal(D.meta.dateStart, null, 'day numbers have no calendar start');
   assert.equal(D.meta.dateMode, 'day');
-  assert.equal(page.els.lgNode.textContent, 'district', 'the label the tool set');
+  assert.match(page.els.stats.innerHTML, /district/, 'the label the tool set');
   // Array.from, so the comparison happens between host arrays, not realms
   assert.deepEqual(
     Array.from(page.T.N(), n => n.gov),
@@ -170,4 +170,152 @@ test('a table that cannot be placed fails with an explanation', { skip: !python 
   assert.match(result.stderr, /No usable rows/);
   assert.match(result.stderr, /longitude\/latitude fields/, 'the error says what to do');
   assert.equal(existsSync(out), false, 'and nothing is written');
+});
+
+test('the toolbox installs as a folder ArcGIS Pro can load', { skip: !python }, () => {
+  const folder = join(root, 'arcgis');
+  const pyt = readFileSync(join(folder, 'FlowMap.pyt'));
+  assert.equal(
+    [...pyt].some(byte => byte > 127),
+    false,
+    'FlowMap.pyt must be pure ASCII or Pro refuses to load it',
+  );
+  assert.notEqual(pyt[0], 0xef, 'no byte-order mark');
+  assert.match(pyt.toString('utf8'), /_load_core\(/, 'the engine is loaded by path, not by name');
+
+  for (const name of ['FlowMap.pyt.xml', 'FlowMap.BuildFlowMapPage.pyt.xml', 'check_install.py'])
+    assert.ok(existsSync(join(folder, name)), name + ' sits next to the toolbox');
+
+  const help = readFileSync(join(folder, 'FlowMap.BuildFlowMapPage.pyt.xml'), 'utf8');
+  const entries = help.match(/<dialogReference>/g) || [];
+  assert.equal(entries.length, 28, 'one help entry per parameter');
+  assert.equal(
+    (readFileSync(join(root, 'tools/arcgis/build-help.py'), 'utf8').match(/FlowMap\.pyt/) || [])
+      .length > 0,
+    true,
+  );
+
+  const install = ran(
+    once('install', ['arcgis/check_install.py', '--stub', 'tools/arcgis']),
+    'check_install',
+  );
+  assert.match(install.stdout, /everything the toolbox needs is here/);
+});
+
+test(
+  'every column parameter is a drop-down filled from the chosen table',
+  { skip: !python },
+  () => {
+    const result = ok(
+      once('dialog', ['tools/arcgis/dialogcheck.py']),
+      'dialogcheck: the pane contract',
+    );
+    assert.match(result.stdout, /is a value list/);
+    assert.match(result.stdout, /JSON layer: .* offers the table's columns/);
+    assert.match(result.stdout, /updateMessages alone fills the drop-downs/);
+    const tally = /(\d+) of (\d+) checks ok/.exec(result.stdout);
+    assert.equal(tally[1], tally[2]);
+  },
+);
+
+test('one name at two positions keeps both ends of the flow', { skip: !python }, () => {
+  const spec = {
+    rows: [
+      {
+        Village: 'Touba',
+        Menages: 120,
+        Lon_rep: 9.09,
+        Lat_rep: 12.88,
+        Lon_dept: 9.08,
+        Lat_dept: 12.87,
+      },
+      {
+        Village: 'Mbacke',
+        Menages: 80,
+        Lon_rep: 9.03,
+        Lat_rep: 12.9,
+        Lon_dept: 9.05,
+        Lat_dept: 12.89,
+      },
+    ],
+    // one name column for both ends, two coordinate pairs: a movement
+    mapping: {
+      oName: 'Village',
+      dName: 'Village',
+      value: 'Menages',
+      oLon: 'Lon_rep',
+      oLat: 'Lat_rep',
+      dLon: 'Lon_dept',
+      dLat: 'Lat_dept',
+    },
+    meta: { title: 'Synthese villages', unit: 'households' },
+  };
+  const specPath = join(work, 'villages-spec.json');
+  writeFileSync(specPath, JSON.stringify(spec));
+  const out = join(work, 'villages-page.html');
+  const json = join(work, 'villages.json');
+  ran(
+    once('villages', [
+      'arcgis/flowmap_core.py',
+      'build',
+      '--input',
+      specPath,
+      '--out',
+      out,
+      '--json',
+      json,
+    ]),
+    'flowmap_core build',
+  );
+  const dataset = JSON.parse(readFileSync(json, 'utf8'));
+  const loops = dataset.edges.filter(edge => edge[1] === edge[2]).length;
+  assert.equal(loops, 0, 'a movement must not collapse into a self-loop');
+  assert.equal(dataset.edges.length, 2, 'both flows kept');
+  assert.equal(dataset.nodes.length, 4, 'two positions per village name');
+
+  // and the page really draws them: the number of links the drawing pass makes
+  const page = loadPage({ html: readFileSync(out, 'utf8') });
+  assert.equal(page.T.getLinks().length, 2, 'the page has two flows to draw');
+  assert.equal(
+    page.T.getLinks().filter(link => link.source === link.target).length,
+    0,
+    'none of them is a curve from a point to itself',
+  );
+});
+
+test('a place record repeated at the same point stays one dot', { skip: !python }, () => {
+  const spec = {
+    rows: [
+      { Village: 'Touba', Menages: 10, Lon: 9.09, Lat: 12.88 },
+      { Village: 'Touba', Menages: 20, Lon: 9.09, Lat: 12.88 },
+      { Village: 'Mbacke', Menages: 30, Lon: 9.03, Lat: 12.9 },
+    ],
+    mapping: { oName: 'Village', value: 'Menages', oLon: 'Lon', oLat: 'Lat' },
+    meta: { title: 'Records per village' },
+  };
+  const specPath = join(work, 'records-spec.json');
+  writeFileSync(specPath, JSON.stringify(spec));
+  const out = join(work, 'records-page.html');
+  const json = join(work, 'records.json');
+  ran(
+    once('records', [
+      'arcgis/flowmap_core.py',
+      'build',
+      '--input',
+      specPath,
+      '--out',
+      out,
+      '--json',
+      json,
+    ]),
+    'flowmap_core build',
+  );
+  const dataset = JSON.parse(readFileSync(json, 'utf8'));
+  assert.equal(dataset.nodes.length, 2, 'one dot per place, not per row');
+  assert.equal(dataset.edges.length, 3, 'every row is still counted');
+  assert.equal(
+    dataset.edges.filter(edge => edge[1] === edge[2]).length,
+    3,
+    'a record inside a place is a self-loop, drawn as a loop',
+  );
 });

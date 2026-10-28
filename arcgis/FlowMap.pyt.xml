@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en">
+  <Esri>
+    <CreaDate>20261020</CreaDate>
+    <CreaTime>00000000</CreaTime>
+    <ArcGISFormat>1.0</ArcGISFormat>
+    <SyncOnce>TRUE</SyncOnce>
+    <ModDate>20261021</ModDate>
+    <ModTime>00000000</ModTime>
+  </Esri>
+  <toolbox name="FlowMap.pyt" displayname="Flow map" alias="flowmap">
+    <summary>One self-contained, offline flow-map page from a table in the project.</summary>
+    <description>Reads a flow table, resolves the places from columns or from a points or outlines layer, and writes one HTML file that draws an animated flow map. Every column is chosen from a drop-down of the table's own columns. The page works offline, needs no API key, and exports GIF, video, SHP, GeoJSON, GeoParquet and CSV. The same flows can be added to the map as a time-enabled layer for the Time Slider.</description>
+  </toolbox>
+</metadata>

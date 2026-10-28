@@ -51,13 +51,37 @@ function canvasContext(pixelSource) {
 }
 
 /* ------------------------------------------------------------------- DOM */
+/** A CSSStyleDeclaration good enough to read back what the page sets. */
+function makeStyle() {
+  const store = new Map();
+  return {
+    setProperty(k, v) {
+      store.set(String(k), String(v));
+    },
+    removeProperty(k) {
+      store.delete(String(k));
+    },
+    getPropertyValue(k) {
+      return store.get(String(k)) || '';
+    },
+    get cssText() {
+      return [...store].map(([k, v]) => k + ':' + v).join(';');
+    },
+  };
+}
+
 function makeElement(id, log) {
   const classes = new Set();
   const el = {
     id,
-    style: {},
+    // CSSStyleDeclaration, the three methods the page actually calls — and the
+    // store behind them, so a test can read back --edge and the other variables
+    style: makeStyle(),
+    // a real element always has both, and the page reads .children.length
+    children: [],
+    childNodes: [],
     hidden: false,
-    value: '280',
+    value: '',
     max: 280,
     min: 0,
     disabled: false,
@@ -117,6 +141,15 @@ function makeElement(id, log) {
     getContext() {
       return (el.__ctx = el.__ctx || canvasContext(log.pixels));
     },
+    /** the browser hands a JPEG back here; a stub stands in for the encoder */
+    toBlob(cb, type = 'image/png') {
+      const head = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
+      const body = new Uint8Array(64).map((_, i) => (i * 7 + el.width + el.height) % 256);
+      const blob = new BlobStub([head, body], { type });
+      blob.arrayBuffer = async () => blob.bytes().buffer;
+      if (typeof setImmediate === 'function') setImmediate(() => cb(blob));
+      else setTimeout(() => cb(blob), 0);
+    },
   };
   return el;
 }
@@ -145,7 +178,13 @@ const chain = () => {
 };
 
 /* ------------------------------------------------------------------ load */
-export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml } = {}) {
+export function loadPage({
+  reducedMotion = false,
+  pixels = true,
+  html: givenHtml,
+  search = '',
+  storage = {},
+} = {}) {
   const html = givenHtml ?? readFileSync(join(root, 'index.html'), 'utf8');
   // Run every script in document order, the way a browser would: a page that
   // came out of the export carries its data in a block ahead of the app.
@@ -181,7 +220,12 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
 
   const document = {
     documentElement: {
-      style: {},
+      style: {
+        setProperty() {},
+        removeProperty() {},
+        getPropertyValue: k => THEME[k] || '',
+      },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
       // the page reads its own markup back when exporting a standalone copy
       outerHTML: html,
     },
@@ -198,10 +242,36 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
     getElementById(id) {
       return this.querySelector('#' + id);
     },
+    addEventListener(type, fn) {
+      log.listeners['doc:' + type] = fn;
+    },
+    removeEventListener() {},
+    addEventListenerOnce(type, fn) {
+      log.listeners['doc:' + type] = fn;
+    },
+    hasFocus: () => false,
+    activeElement: null,
+    // the translation pass walks the DOM; with no nodes there is nothing to do
+    createTreeWalker(root) {
+      return { currentNode: root || null, nextNode: () => null };
+    },
+    createRange() {
+      return { selectNodeContents() {}, setStart() {}, setEnd() {}, toString: () => '' };
+    },
     createElement(tag) {
       const el = makeElement(tag === 'a' ? '__anchor' : '__' + tag, log);
       el.tagName = tag.toUpperCase();
-      if (tag === 'canvas') el.getContext = () => canvasContext(log.pixels);
+      if (tag === 'canvas') {
+        el.getContext = () => canvasContext(log.pixels);
+        el.toBlob = (cb, type = 'image/png') => {
+          const blob = new BlobStub(
+            [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46])],
+            { type },
+          );
+          blob.arrayBuffer = async () => blob.bytes().buffer;
+          setImmediate(() => cb(blob));
+        };
+      }
       return el;
     },
   };
@@ -265,15 +335,67 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
     Image: ImageStub,
     Blob: BlobStub,
     File: FileStub,
-    URL: {
-      createObjectURL(blob) {
-        log.blobs.push(blob);
-        return 'blob:test';
+    URL: Object.assign(
+      class {
+        constructor(text) {
+          this.href = String(text);
+          this.search = String(text).includes('?') ? '?' + String(text).split('?')[1] : '';
+          this.searchParams = new URLSearchParams(this.search);
+        }
+        toString() {
+          return this.href;
+        }
       },
-      revokeObjectURL() {},
+      {
+        createObjectURL(blob) {
+          log.blobs.push(blob);
+          return 'blob:test';
+        },
+        revokeObjectURL() {},
+      },
+    ),
+    URLSearchParams,
+    // used to translate nodes the page itself inserts; it never fires here,
+    // because every insert in the tests is followed by an explicit translate
+    NodeFilter: {
+      SHOW_TEXT: 4,
+      SHOW_ELEMENT: 1,
+      FILTER_ACCEPT: 1,
+      FILTER_REJECT: 2,
+      FILTER_SKIP: 3,
     },
-    __recordDownload(name, size, type) {
-      log.downloads.push({ name, bytes: size, type });
+    location: {
+      href: 'https://example.test/index.html' + search,
+      search,
+      protocol: 'https:',
+      hash: '',
+    },
+    history: { replaceState() {}, pushState() {} },
+    navigator: { clipboard: { writeText: () => Promise.resolve() }, userAgent: 'node-test' },
+    localStorage: {
+      store: new Map(Object.entries(storage)),
+      getItem(k) {
+        return this.store.has(k) ? this.store.get(k) : null;
+      },
+      setItem(k, v) {
+        this.store.set(k, String(v));
+      },
+      removeItem(k) {
+        this.store.delete(k);
+      },
+    },
+    MutationObserver: class {
+      constructor(cb) {
+        this.cb = cb;
+      }
+      observe() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    },
+    __recordDownload(name, size, type, blob) {
+      log.downloads.push({ name, bytes: size, type, blob });
     },
     TextEncoder,
     TextDecoder,
@@ -350,11 +472,22 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
   buildParquet, pageHeader, encodeGIF, gifPalette, gifHistogram, gifLzw, gifIndices,
   exportGIF, captureFrames, downloadBytes, runExport, slugify, wkbPointOf, wkbLineOf,
   wkbPolygonOf, geoMetadataFor, canvasReadable,
+  // 7.7: the look, the language, the area values, the extras
+  setLang, setPalette, setMode, prepareTheme, themeFromRows, themeRowsFromText,
+  openEmbed, embedUrl, exportPDF, qIn, qOut, wArr, wLeft,
+  getTheme: () => TH,
+  getPal: () => PAL,
+  getCum: () => CUM,
+  getLang: () => LANG,
+  C: () => C,
   // state the tests read
   get: () => ({ blend, upTo, style, provIdx, provMsg, limitMode, mode: null, playing, hover }),
   getPageSource: () => PAGE_SOURCE,
   setDay, fd, fmt, plural,
   getProps: () => ({ GOVPATH, DISTPATH }),
+  DISTPATH: () => DISTPATH,
+  GOVPATH: () => GOVPATH,
+  chainOf: s => STYLE[s].chain,
   getLinks: () => links,
   getAct: () => act,
   // the library and the simulation: top-level const bindings are not readable
@@ -389,6 +522,13 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
     setDay(day) {
       this.input('sl', day);
     },
+    /** tick or untick a checkbox and fire its change handler */
+    toggle(id, checked) {
+      els[id].checked = Boolean(checked);
+      const fn = log.listeners[id]?.change;
+      if (!fn) throw new Error('no change listener on #' + id);
+      return fn({ target: els[id] });
+    },
     /** fire every pending <img> as loaded or as blocked */
     settleTiles(ok = true) {
       let n = 0;
@@ -400,6 +540,22 @@ export function loadPage({ reducedMotion = false, pixels = true, html: givenHtml
         else img.onerror?.();
       }
       return n;
+    },
+    /** Wait for real work (a PDF, a GIF) that itself waits on tiles and timers:
+        fire the images and run the queued timeouts until the promise settles. */
+    async settle(promise) {
+      let state = 'pending';
+      promise.then(
+        () => (state = 'done'),
+        () => (state = 'failed'),
+      );
+      for (let i = 0; i < 400 && state === 'pending'; i++) {
+        this.settleTiles(true);
+        const timers = log.timers.splice(0, log.timers.length);
+        for (const t of timers) t.fn();
+        await new Promise(r => setImmediate(r));
+      }
+      return promise;
     },
     pumpTiles(ok = true) {
       let fired = 0;
