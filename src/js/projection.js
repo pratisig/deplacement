@@ -12,19 +12,21 @@ function mercY(lat, z) {
 let MAP = { z: 6, s: 1, ox: 0, oy: 0, minX: 0, minY: 0, spanX: 1, spanY: 1 };
 let GOVPATH = {},
   DISTPATH = {};
+let VIEW = null; // {lon0, lon1, lat0, lat1} set by zoom/pan; null = fit the data
 function project() {
-  const pad = 26,
+  const V = VIEW || B;
+  const pad = VIEW ? 0 : 26,
     availW = Math.max(120, W - 2 * pad),
     availH = Math.max(120, H - 2 * pad);
   const span = z => ({
-    x: mercX(B.lon1, z) - mercX(B.lon0, z),
-    y: mercY(B.lat0, z) - mercY(B.lat1, z),
+    x: mercX(V.lon1, z) - mercX(V.lon0, z),
+    y: mercY(V.lat0, z) - mercY(V.lat1, z),
   });
   // Deepest zoom whose tiles are still drawn big enough to read (a 256 px
   // tile should land on at least ~110 CSS px). The scale k always fits the
   // whole country inside the frame, so nothing is cropped.
   let z = 3;
-  for (let zz = 3; zz <= 12; zz++) {
+  for (let zz = 3; zz <= 16; zz++) {
     const s = span(zz),
       k = Math.min(availW / s.x, availH / s.y);
     if (TX * k >= 110) z = zz;
@@ -37,8 +39,8 @@ function project() {
     s: k,
     ox: (W - s.x * k) / 2,
     oy: (H - s.y * k) / 2,
-    minX: mercX(B.lon0, z),
-    minY: mercY(B.lat1, z),
+    minX: mercX(V.lon0, z),
+    minY: mercY(V.lat1, z),
     spanX: s.x,
     spanY: s.y,
   };
@@ -79,4 +81,5 @@ function project() {
     });
     DISTPATH[name] = rings;
   }
+  buildThemePaths();
 }

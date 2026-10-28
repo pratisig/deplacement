@@ -343,7 +343,8 @@ function buildStandaloneHTML() {
   // immediately before </head>, which is what keeps this from matching the
   // same text where it appears inside the app's own source.
   const anchor = new RegExp('<script data-preload>[\\s\\S]*?</' + 'script>(?=</head>)');
-  const clean = src.replace(anchor, '');
+  // the embed switches belong to the frame, not to the saved page
+  const clean = src.replace(anchor, '').replace(/(<html\b[^>]*?)\sclass="[^"]*"/, '$1');
   const payload = JSON.stringify({
     meta: D.meta,
     nodes: D.nodes,
@@ -352,6 +353,7 @@ function buildStandaloneHTML() {
     total: D.total,
     admin1: D.admin1,
     admin2: D.admin2,
+    theme: D.theme,
   }).replace(/<\//g, '<\\/');
   const open = '<script data-preload>';
   const preload = open + 'window.__PRELOAD__=' + payload + ';</' + 'script>';
@@ -363,7 +365,7 @@ function buildStandaloneHTML() {
 function downloadBytes(fileName, bytes, mime) {
   const blob = new Blob([bytes], { type: mime });
   if (typeof globalThis.__recordDownload === 'function')
-    globalThis.__recordDownload(fileName, blob.size ?? bytes.length ?? 0, mime);
+    globalThis.__recordDownload(fileName, blob.size ?? bytes.length ?? 0, mime, blob);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -425,13 +427,28 @@ function canvasReadable() {
   }
 }
 
+/** Skip the tiles that block read-back and clear the canvas's "tainted" mark. */
+function makeReadable() {
+  NOTAINT = true;
+  cv.width = cv.width; // resetting the bitmap makes the canvas origin-clean again
+  draw(0);
+  return canvasReadable();
+}
+function endReadable() {
+  NOTAINT = false;
+  draw(0);
+}
+
 function exportGIF(options = {}) {
-  const wanted = style;
-  let tainted = !canvasReadable();
-  if (tainted) setStyle('none'); // tiles taint the canvas, so drop them
-  const frames = captureFrames({ width: options.width || 720, maxFrames: options.maxFrames || 60 });
-  const bytes = encodeGIF(frames, { delay: options.delay || 8 });
-  if (tainted) setStyle(wanted);
+  const tainted = !canvasReadable();
+  if (tainted) makeReadable();
+  let frames, bytes;
+  try {
+    frames = captureFrames({ width: options.width || 720, maxFrames: options.maxFrames || 60 });
+    bytes = encodeGIF(frames, { delay: options.delay || 8 });
+  } finally {
+    if (tainted) endReadable();
+  }
   return {
     bytes,
     frames: frames.length,
@@ -446,6 +463,8 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
   return new Promise((resolve, reject) => {
     if (typeof MediaRecorder === 'undefined')
       return reject(new Error('MediaRecorder is not available.'));
+    const wasTainted = !canvasReadable();
+    if (wasTainted) makeReadable();
     const stream = cv.captureStream(fps);
     const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m =>
       MediaRecorder.isTypeSupported(m),
@@ -466,7 +485,7 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
     rebuild();
     rec.start(200);
     playing = true;
-    $('#bPlay').textContent = 'Pause';
+    $('#bPlay').textContent = t('pause');
     const tick = Math.max(40, Math.round((seconds * 1000) / (D.maxDay + 1)));
     timer = setInterval(() => {
       upTo = Math.min(D.maxDay, upTo + 1);
@@ -478,77 +497,9 @@ function exportVideo({ seconds = 12, fps = 30 } = {}) {
     rec.onstop = () => {
       clearInterval(timer);
       playing = false;
-      $('#bPlay').textContent = 'Play';
+      $('#bPlay').textContent = t('play');
+      if (wasTainted) endReadable();
       resolve({ blob: new Blob(chunks, { type: mime }), mime });
     };
   });
-}
-
-/* ------------------------------------------------------------------ menu */
-const EXPORTS = [
-  [
-    'gif',
-    'Animation (GIF)',
-    'Animated GIF of the whole period, no basemap if tiles block read-back.',
-  ],
-  ['webm', 'Animation (video)', 'Records the timeline as a WebM video.'],
-  ['json', 'Data (JSON)', 'The current day: places, flows and totals.'],
-  ['geojson', 'Map (GeoJSON)', 'Points, flows and outlines — opens in QGIS, ArcGIS, geojson.io.'],
-  ['parquet', 'Map (GeoParquet)', 'One table with WKB geometry, for geopandas, DuckDB, BigQuery.'],
-  ['shp', 'Map (Shapefile)', 'ZIP of places.shp, flows.shp, areas.shp with .prj, .shx and .dbf.'],
-  ['csv', 'Data (CSV)', 'Two tables, places and flows, for the current day.'],
-  [
-    'html',
-    'Page (self-contained)',
-    'This whole app with your data inside, as one file to hand over.',
-  ],
-];
-
-async function runExport(kind) {
-  const snap = snapshot();
-  const slug = slugify(snap.meta.title || 'flow-map');
-  const stamp = snap.meta.dateStart ? '-' + fd(snap.day).replace(/\s/g, '') : '';
-  if (kind === 'json') downloadBytes(slug + stamp + '.json', buildJSON(snap), 'application/json');
-  else if (kind === 'geojson')
-    downloadBytes(slug + stamp + '.geojson', buildGeoJSON(snap), 'application/geo+json');
-  else if (kind === 'parquet')
-    downloadBytes(
-      slug + stamp + '.parquet',
-      buildGeoParquet(snap),
-      'application/vnd.apache.parquet',
-    );
-  else if (kind === 'shp')
-    downloadBytes(slug + stamp + '-shp.zip', buildShapefileZIP(snap), 'application/zip');
-  else if (kind === 'csv') {
-    downloadBytes(slug + stamp + '-places.csv', buildPlacesCSV(snap), 'text/csv');
-    downloadBytes(slug + stamp + '-flows.csv', buildFlowsCSV(snap), 'text/csv');
-  } else if (kind === 'gif') {
-    const { bytes, tainted, frames } = exportGIF();
-    downloadBytes(slug + '.gif', bytes, 'image/gif');
-    if (tainted)
-      feedback(
-        'The map tiles do not allow pixel read-back, so the GIF is exported without a basemap.',
-      );
-    else feedback('Exported ' + frames + ' frames.');
-  } else if (kind === 'html') {
-    downloadBytes(slug + '.html', buildStandaloneHTML(), 'text/html');
-    feedback('Saved the page with this dataset inside — one file, works offline.');
-  } else if (kind === 'webm') {
-    feedback('Recording the timeline…');
-    const { blob } = await exportVideo();
-    downloadBytes(slug + '.webm', blob, 'video/webm');
-    feedback('Recorded.');
-  }
-}
-
-function slugify(s) {
-  return (
-    String(s)
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'flow-map'
-  );
 }

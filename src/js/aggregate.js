@@ -11,25 +11,33 @@ function rebuild() {
     n.within = 0;
     n.active = false;
   }
-  const m = new Map();
+  const m = new Map(),
+    mi = new Map();
   totalHH = 0;
+  totalIn = 0;
   for (const e of E) {
-    if (e[0] > upTo) continue;
+    if (e[0] > upTo || e[0] < FROM) continue;
     const o = e[1],
       d = e[2],
-      h = e[3];
+      h = e[3],
+      hin = e.length > 4 && e[4] != null && !isNaN(+e[4]) ? +e[4] : h;
+    if (FILT.fd >= 0) {
+      if (o !== FILT.fd && d !== FILT.fd) continue;
+    } else if (FILT.fg && N[o].gov !== FILT.fg && N[d].gov !== FILT.fg) continue;
     totalHH += h;
+    totalIn += hin;
     if (o === d) {
       N[o].within += h;
       N[o].active = true;
       continue;
     }
     N[o].out += h;
-    N[d].inn += h;
+    N[d].inn += hin;
     N[o].active = true;
     N[d].active = true;
     const k = o * 1000 + d;
     m.set(k, (m.get(k) || 0) + h);
+    mi.set(k, (mi.get(k) || 0) + hin);
   }
   act = N.filter(n => n.active);
   for (const n of act) {
@@ -53,6 +61,7 @@ function rebuild() {
       source: N[o],
       target: N[d],
       w,
+      wi: mi.get(k) || 0,
       same: N[o].gov === N[d].gov,
       ph: [],
       sp: 0.6 + ((o * 7 + d * 13) % 10) / 12,
@@ -69,25 +78,35 @@ function rebuild() {
         l.ph.push(((l.source.i * 31 + l.target.i * 17 + j * 977) % 1000) / 1000);
     }
   }
+  allLinks = links;
+  // the route limit keeps the strongest routes on the map; the analysis below
+  // always covers every route of the selection
+  const topEl = $('#topN');
+  topEl.max = Math.max(5, allLinks.length);
+  topEl.min = Math.min(5, topEl.max);
+  topEl.value = TOPN === null ? topEl.max : Math.min(TOPN, topEl.max);
+  $('#topNVal').textContent =
+    TOPN === null || TOPN >= allLinks.length
+      ? String(allLinks.length)
+      : TOPN + ' / ' + allLinks.length;
+  if (TOPN !== null && TOPN < allLinks.length)
+    links = allLinks
+      .slice()
+      .sort((a, b) => b.w - a.w)
+      .slice(0, TOPN);
   topIds = act
     .slice()
     .sort((a, b) => b.t - a.t)
     .slice(0, 10)
     .map(n => n.i);
+  const headBits = [periodLabel(), FILT.fd >= 0 ? N[FILT.fd].name : FILT.fg].filter(Boolean);
   $('#stats').innerHTML =
-    '<b>' +
-    fmt(totalHH) +
-    '</b> ' +
-    LBL.unit +
-    ' · <b>' +
-    fmt(act.length) +
-    '</b> ' +
-    plural(LBL.node) +
-    ' · <b>' +
-    fmt(links.length) +
-    '</b> routes';
-  $('#dt').textContent = fd(upTo);
+    (headBits.length ? '<div class="sh">' + esc(headBits.join(' · ')) + '</div>' : '') +
+    t('statsLine', totalHH, LBL.unit, { n: act.length, word: plural(LBL.node) }, allLinks.length);
+  $('#dt').textContent = FROM > 0 && FROM < upTo ? fd(FROM) + ' – ' + fd(upTo) : fd(upTo);
   table();
+  renderDash();
+  renderPeriods();
 }
 const IRREGULAR = {
   person: 'people',
@@ -106,6 +125,8 @@ const IRREGULAR = {
 const ALREADY_PLURAL = new Set(['people', 'children', 'men', 'women', 'staff', 'police', 'data']);
 function plural(word) {
   const w = String(word || 'item');
+  if (LANG === 'fr')
+    return /[sxz]$/i.test(w) ? w : /al$/i.test(w) ? w.slice(0, -2) + 'aux' : w + 's';
   const k = w.toLowerCase();
   if (ALREADY_PLURAL.has(k)) return w;
   if (IRREGULAR[k]) return IRREGULAR[k];

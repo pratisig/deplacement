@@ -98,7 +98,7 @@ test('the page the toolbox wrote boots with exactly that dataset', { skip: !pyth
   assert.equal(D.total, facts.total, 'total');
   assert.equal(D.meta.title, facts.meta.title);
   assert.equal(page.els.title.textContent, facts.meta.title);
-  assert.equal(page.els.lgUnit.textContent, 'households');
+  assert.match(page.els.stats.innerHTML, /households/, 'the unit the tool set is on the page');
   assert.equal(page.T.get().upTo, D.maxDay, 'the slider starts on the last day');
   const slider = page.els.sl;
   assert.equal(Number(slider.max), facts.maxDay, 'the slider reaches the last day');
@@ -142,7 +142,7 @@ test('the core also builds a page from a plain spec file', { skip: !python }, ()
   assert.equal(D.meta.nodeLabel, 'district');
   assert.equal(D.meta.dateStart, null, 'day numbers have no calendar start');
   assert.equal(D.meta.dateMode, 'day');
-  assert.equal(page.els.lgNode.textContent, 'district', 'the label the tool set');
+  assert.match(page.els.stats.innerHTML, /district/, 'the label the tool set');
   // Array.from, so the comparison happens between host arrays, not realms
   assert.deepEqual(
     Array.from(page.T.N(), n => n.gov),

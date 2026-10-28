@@ -253,7 +253,9 @@ test('captureFrames steps the whole period and restores the view', () => {
   const frames = T.captureFrames({ width: 320, maxFrames: 6 });
   assert.equal(frames.length >= 6, true, 'frames were captured: ' + frames.length);
   assert.equal(frames[0].width, 320);
-  assert.equal(frames[0].height, Math.round(713 * (320 / 1150)));
+  // the frames keep the stage's own aspect ratio, whatever the layout makes it
+  const cv = page.els.cv;
+  assert.equal(frames[0].height, Math.round(320 * (cv.height / cv.width)));
   assert.equal(T.get().upTo, before, 'the timeline is put back');
   const seen = new Set(frames.map(f => f.data[0]));
   assert.ok(
@@ -272,7 +274,10 @@ test('exportGIF falls back to no basemap when tiles block read-back', () => {
 
 test('every export is offered in the menu and runs', async () => {
   const kinds = T.EXPORTS.map(e => e[0]);
-  assert.deepEqual([...kinds], ['gif', 'webm', 'json', 'geojson', 'parquet', 'shp', 'csv', 'html']);
+  assert.deepEqual(
+    [...kinds],
+    ['pdf', 'gif', 'webm', 'json', 'geojson', 'parquet', 'shp', 'csv', 'embed', 'html'],
+  );
   for (const kind of ['json', 'geojson', 'parquet', 'shp', 'csv', 'html']) {
     await T.runExport(kind);
   }

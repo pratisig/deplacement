@@ -91,6 +91,95 @@ function parseBoundaryGeoJSON(text, opts = {}) {
   return { features: out, nameProp, count: out.length };
 }
 
+/** flat [x0, y0, x1, y1, …] -> [[x, y], …] (the shape the point-in-ring test takes) */
+function themePoints(flat) {
+  const pts = [];
+  for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
+  return pts;
+}
+
+/**
+ * Values by area: rows of {name, value, group, rings} become the `theme` object
+ * the page draws. A row without its own rings is matched by name against the
+ * boundary layers; its group is the larger area whose outline holds it.
+ * Several rows for one area are summed, as in the toolbox.
+ */
+function themeFromRows({ rows, label, source, boundaries = [] }) {
+  const warnings = [];
+  const levels = boundaries.map(b => (b.parsed || b).features || []);
+  const lookup = new Map();
+  for (const feats of levels)
+    for (const f of feats) if (!lookup.has(keyName(f.name))) lookup.set(keyName(f.name), f);
+  const big = levels[0] || [];
+  const merged = new Map();
+  const missing = new Set();
+  let bad = 0;
+  for (const row of rows || []) {
+    const name = String(row.name ?? '').trim();
+    if (!name) continue;
+    const value = typeof row.value === 'number' ? row.value : num(row.value);
+    if (value === null) {
+      bad++;
+      continue;
+    }
+    let shown = name,
+      rings = row.rings;
+    if (!rings || !rings.length) {
+      let hit = lookup.get(keyName(name));
+      if (!hit) {
+        // tolerate "District (Region)" and other decorations, as place names are
+        const k = keyName(name);
+        if (k.length > 3)
+          for (const [key, f] of lookup)
+            if (key.length > 3 && (key.includes(k) || k.includes(key))) {
+              hit = f;
+              break;
+            }
+      }
+      if (!hit) {
+        missing.add(name);
+        continue;
+      }
+      shown = hit.name;
+      rings = hit.rings;
+    }
+    let entry = merged.get(shown);
+    if (!entry) {
+      entry = { n: shown, g: '', v: 0, p: rings };
+      merged.set(shown, entry);
+    }
+    entry.v += value;
+    const group = String(row.group || '').trim();
+    if (group && !entry.g) entry.g = group;
+  }
+  if (bad)
+    warnings.push(bad + ' row(s) of the area values had no readable number and were skipped.');
+  if (missing.size)
+    warnings.push(
+      missing.size +
+        ' area name(s) of the area values were not found in the boundaries (' +
+        [...missing].slice(0, 6).join(', ') +
+        (missing.size > 6 ? '…' : '') +
+        '): they are not drawn.',
+    );
+  for (const entry of merged.values()) {
+    if (entry.g || !big.length) continue;
+    const first = entry.p[0] && entry.p[0].length ? entry.p[0] : null;
+    if (!first) continue;
+    const centre = ringCentroidLL(themePoints(first));
+    const host = big.find(f => pointInRingsLL(centre[0], centre[1], f.rings.map(themePoints)));
+    if (host) entry.g = host.name;
+  }
+  const areas = [...merged.values()]
+    .map(a => ({ n: a.n, g: a.g, v: Math.round(a.v * 1e6) / 1e6, p: a.p }))
+    .sort((a, b) => b.v - a.v);
+  if (!areas.length) {
+    warnings.push('No area could be drawn from the area values.');
+    return { theme: null, warnings };
+  }
+  return { theme: { label: label || 'Value', source: source || '', areas }, warnings };
+}
+
 /** name -> [lon, lat] lookup built from a parsed boundary file. */
 function boundaryLookup(boundary) {
   const map = new Map();
@@ -117,7 +206,7 @@ function num(v) {
  * Turn a mapped table (+ optional boundaries) into the dataset the app draws.
  * Returns {source, warnings}. Throws a user-readable Error when it cannot.
  */
-function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
+function assembleDataset({ table, mapping, boundaries = [], options = {}, theme = null }) {
   const warnings = [];
   const rows = table.rows.filter(r => Object.values(r).some(v => String(v).trim() !== ''));
   if (!rows.length) throw new Error('The table has no data rows.');
@@ -228,7 +317,12 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
 
   const edges = [];
   let total = 0;
+  let totalIn = 0;
   let skipped = 0;
+  // A flow can carry two numbers: what left and what arrived. The line weight
+  // follows the departure value, the arrivals and the net balance follow the
+  // arrival value. An empty arrival cell means "the same as the departure".
+  const hasIn = has(mapping.valueIn);
   const missing = new Set();
 
   rows.forEach((row, r) => {
@@ -250,9 +344,27 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
       missing.add((!from ? oName : dName) || '(unnamed)');
       return;
     }
-    edges.push([dayOfRow[r], from.i, to.i, value]);
+    const rawIn = hasIn ? num(get(row, mapping.valueIn)) : null;
+    const valueIn = rawIn === null ? value : rawIn;
+    edges.push(
+      hasIn ? [dayOfRow[r], from.i, to.i, value, valueIn] : [dayOfRow[r], from.i, to.i, value],
+    );
     total += value;
+    totalIn += valueIn;
   });
+
+  // A place inside a region belongs to it: with two boundary layers, the
+  // larger one names the group, exactly as the toolbox does, so the group
+  // filter, the arrival groups and the summary all have something to work on.
+  if (boundaries.length >= 2) {
+    const coarse = (boundaries[0].parsed || boundaries[0]).features || [];
+    const shapes = coarse.map(f => ({ name: f.name, rings: f.rings.map(themePoints) }));
+    for (const n of nodes) {
+      if (n[1]) continue;
+      const host = shapes.find(f => pointInRingsLL(n[2], n[3], f.rings));
+      if (host) n[1] = host.name;
+    }
+  }
 
   if (!edges.length) {
     const hint = boundaries.length
@@ -300,7 +412,23 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     dateStart: dateMode === 'date' ? dateStart : null,
     // "sequence": no date column, the rows' order drives the timeline
     dateMode: dateMode === 'none' ? 'sequence' : dateMode,
+    // the author's own names for the two quantities, when given
+    inLabel: options.inLabel || undefined,
+    outLabel: options.outLabel || undefined,
+    arrivalValue: hasIn,
   };
+
+  let themeOut;
+  if (theme && theme.rows && theme.rows.length) {
+    const built = themeFromRows({
+      rows: theme.rows,
+      label: theme.label,
+      source: theme.source,
+      boundaries,
+    });
+    warnings.push(...built.warnings);
+    themeOut = built.theme || undefined;
+  }
 
   const source = {
     meta,
@@ -308,8 +436,10 @@ function assembleDataset({ table, mapping, boundaries = [], options = {} }) {
     edges,
     maxDay,
     total,
+    totalIn: hasIn ? totalIn : undefined,
     admin1: boundaries[0] ? toBoundary(boundaries[0].parsed || boundaries[0]) : undefined,
     admin2: boundaries[1] ? toBoundary(boundaries[1].parsed || boundaries[1]) : undefined,
+    theme: themeOut,
   };
   return { source, warnings };
 }

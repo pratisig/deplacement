@@ -17,8 +17,8 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
 import { Canvas } from './png.mjs';
+import { loadPage } from '../test/harness.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -35,93 +35,12 @@ const htmlPath =
 const WIDTH = 1150,
   HEIGHT = 713;
 
-/* Run every script block in document order, exactly as a browser would: a
-   page that came out of an export — or out of the ArcGIS toolbox — carries
-   its dataset in a block ahead of the app. Then reuse the page's own
-   projection and paths, which is what makes this a real alignment check. */
-const html = readFileSync(htmlPath, 'utf8');
-const script = html
-  .match(/<script[^>]*>[\s\S]*?<\/script>/g)
-  .map(block => block.replace(/^<script[^>]*>|<\/script>$/g, ''))
-  .join('\n;\n');
-
-const ctxStub = new Proxy(
-  { measureText: () => ({ width: 40 }), setLineDash() {} },
-  {
-    get: (t, k) => (k in t ? t[k] : () => {}),
-    set: () => true,
-  },
-);
-const listeners = {};
-const element = id => ({
-  id,
-  style: {},
-  hidden: false,
-  value: '280',
-  max: 280,
-  innerHTML: '',
-  textContent: '',
-  clientWidth: WIDTH,
-  clientHeight: HEIGHT,
-  offsetWidth: 120,
-  offsetHeight: 60,
-  addEventListener(k, f) {
-    (listeners[id] = listeners[id] || {})[k] = f;
-  },
-  setAttribute() {},
-  getAttribute() {},
-  getBoundingClientRect: () => ({ left: 0, top: 0, width: WIDTH, height: HEIGHT }),
-  getContext: () => ctxStub,
-});
-const els = {};
-const sandbox = {
-  document: {
-    documentElement: { style: {} },
-    querySelector: s =>
-      els[s.replace('#', '')] || (els[s.replace('#', '')] = element(s.replace('#', ''))),
-  },
-  window: { devicePixelRatio: 2, innerWidth: WIDTH, innerHeight: HEIGHT },
-  getComputedStyle: () => ({
-    getPropertyValue: k =>
-      ({
-        '--bg': '#07090c',
-        '--ink': '#e6edf3',
-        '--edge': '#d9a066',
-        '--spark': '#ffeccb',
-        '--recv': '#3987e5',
-        '--send': '#d95926',
-        '--bal': '#b4c0cb',
-        '--muted': '#93a4b3',
-      })[k] || '#000',
-  }),
-  matchMedia: () => ({ matches: true }), // reduced motion: draw one frame
-  Image: class {
-    set src(v) {
-      this._src = v;
-    }
-    get src() {
-      return this._src;
-    }
-  },
-  requestAnimationFrame: () => 0,
-  setTimeout: () => 0,
-  setInterval: () => 0,
-  clearInterval: () => {},
-  addEventListener() {},
-  innerWidth: WIDTH,
-  innerHeight: HEIGHT,
-  console: { log() {}, warn() {}, error() {} },
-};
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(
-  script +
-    ';globalThis.__T={MAP:()=>MAP,mercX,mercY,project,size,B:()=>B,N:()=>N,D:()=>D,EXAMPLE,' +
-    'GOVPATH:()=>GOVPATH,DISTPATH:()=>DISTPATH,PROV,STYLE,loadSource,' +
-    'chainOf:s=>STYLE[s].chain,rebuild,links:()=>links,getLinks:()=>links,blend:()=>blend};',
-  sandbox,
-);
-const T = sandbox.__T;
+/* Load the page exactly as the test suite does: a stubbed DOM, canvas and
+   image loader, the real app code. Then reuse the page's own projection and
+   paths, which is what makes this a real alignment check. */
+const page = loadPage({ html: readFileSync(htmlPath, 'utf8'), reducedMotion: true });
+const T = page.T;
+if (!T.D().nodes.length) T.loadSource(T.EXAMPLE); // a page with no data of its own
 if (!T.D().nodes.length) T.loadSource(T.EXAMPLE); // a page with no data of its own
 const MAP = T.MAP();
 

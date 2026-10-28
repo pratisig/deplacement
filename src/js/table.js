@@ -399,4 +399,5 @@ const MAPPING_FIELDS = [
   ['dLat', 'Destination latitude', false],
   ['date', 'Date or day (optional)', false],
   ['value', 'Value', true],
+  ['valueIn', 'Arrival value (optional)', false],
 ];

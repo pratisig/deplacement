@@ -2,7 +2,8 @@
    travellers, places and labels. The map fades out as the network takes over,
    so the two layouts are one continuous view rather than two screens. */
 
-function draw(t) {
+function draw(ms) {
+  const dl = SHOW_FLOWS ? links : [];
   viewPositions();
   const b = blend;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -10,13 +11,14 @@ function draw(t) {
   ctx.fillRect(0, 0, W, H);
   if (b < 0.98) {
     drawBasemap(1 - b);
+    drawTheme(1 - b);
     drawLimits(1 - b);
   }
   const hv = hover;
   let nb = null;
   if (hv) {
     nb = new Set([hv.i]);
-    for (const l of links)
+    for (const l of dl)
       if (l.source === hv || l.target === hv) {
         nb.add(l.source.i);
         nb.add(l.target.i);
@@ -24,7 +26,7 @@ function draw(t) {
   }
   ctx.lineCap = 'round';
   ctx.strokeStyle = C.edge;
-  for (const l of links) {
+  for (const l of dl) {
     const s = l.source,
       e = l.target,
       dx = e.rx - s.rx,
@@ -52,18 +54,44 @@ function draw(t) {
     ctx.stroke();
   }
   ctx.setLineDash([]);
+  if (dl.length <= 150) {
+    // arrowheads at the middle of each route: the direction stays readable
+    // when the page is printed or exported, where nothing moves
+    ctx.fillStyle = C.edge;
+    for (const l of dl) {
+      const s = l.source,
+        e = l.target;
+      if (s === e) continue;
+      const hl = hv && (s === hv || e === hv);
+      ctx.globalAlpha = hv ? (hl ? 0.95 : 0.12) : 0.8;
+      const x = 0.25 * s.rx + 0.5 * l.cx + 0.25 * e.rx,
+        y = 0.25 * s.ry + 0.5 * l.cy + 0.25 * e.ry;
+      const ang = Math.atan2(e.ry - s.ry, e.rx - s.rx);
+      const sz = 3.5 + Math.min(3.5, Math.sqrt(l.w) * 0.08);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(sz, 0);
+      ctx.lineTo(-sz * 0.8, -sz * 0.75);
+      ctx.lineTo(-sz * 0.8, sz * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
   {
     // the dots travelling along the lines are the flow: they are drawn on
     // every frame, reduced motion or not
     ctx.fillStyle = C.spark;
-    for (const l of links) {
+    for (const l of dl) {
       if (!l.ph.length) continue;
       const hl = hv && (l.source === hv || l.target === hv);
       ctx.globalAlpha = hv ? (hl ? 0.95 : 0.1) : 0.8;
       const s = l.source,
         e = l.target;
       for (const p of l.ph) {
-        const u = (p + t * 0.00012 * l.sp) % 1,
+        const u = (p + ms * 0.00012 * l.sp) % 1,
           v = 1 - u;
         const x = v * v * s.rx + 2 * v * u * l.cx + u * u * e.rx,
           y = v * v * s.ry + 2 * v * u * l.cy + u * u * e.ry;
@@ -103,7 +131,7 @@ function draw(t) {
       const count = Math.min(3, 1 + Math.floor(Math.log2(1 + n.within) / 2));
       ctx.globalAlpha = dim ? 0.12 : 0.85;
       for (let k = 0; k < count; k++) {
-        const a = t * 0.0009 * (0.7 + ((n.i * 7 + k * 13) % 10) / 12) + k * 2.09 + n.i * 1.7;
+        const a = ms * 0.0009 * (0.7 + ((n.i * 7 + k * 13) % 10) / 12) + k * 2.09 + n.i * 1.7;
         ctx.beginPath();
         ctx.arc(n.rx + Math.cos(a) * ring, n.ry + Math.sin(a) * ring, 1.5, 0, 6.2832);
         ctx.fill();
@@ -143,7 +171,7 @@ function draw(t) {
     ctx.font = '10px "IBM Plex Mono",ui-monospace,monospace';
     ctx.fillStyle = C.ring;
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Network layout — distance has no geographic meaning', 6, H - 6);
+    ctx.fillText(t('netLayout'), 6, H - 6);
     ctx.globalAlpha = 1;
   }
   if (b < 0.98 && curProv()) {
@@ -155,11 +183,11 @@ function draw(t) {
     ctx.globalAlpha = 1;
   }
 }
-function loop(t) {
+function loop(now) {
   // a throw here would otherwise repeat sixty times a second and leave the
   // canvas blank with no explanation
   try {
-    draw(t);
+    draw(now);
   } catch (err) {
     if (typeof showFailure === 'function') showFailure(err);
     return;
