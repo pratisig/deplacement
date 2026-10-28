@@ -91,9 +91,13 @@ function geometryRings(geom) {
 
 /** A representative point for a geometry: the centroid of its largest ring. */
 function geometryCentre(geom) {
+  // a point has no ring: read it first, or a layer of points arrives with no
+  // coordinates at all and cannot be placed on the map
+  if (geom && geom.type === 'Point') return [geom.coordinates[0], geom.coordinates[1]];
+  if (geom && geom.type === 'MultiPoint' && geom.coordinates.length)
+    return [geom.coordinates[0][0], geom.coordinates[0][1]];
   const rings = geometryRings(geom).filter(r => r.length >= 2);
   if (!rings.length) return null;
-  if (geom.type === 'Point') return [geom.coordinates[0], geom.coordinates[1]];
   let best = null,
     bestArea = -1;
   for (const ring of rings) {
@@ -239,6 +243,112 @@ const FIELD_HINTS = {
   ],
 };
 
+/* ------------------------------------------------------------------------
+   Coordinates. A flow table names its two ends in the headers, so the two
+   coordinate pairs must be read by that name and never by position: with
+   `lon_from, lat_from, lon_to, lat_to`, taking the column next to the origin
+   *name* pairs a longitude with the other end's latitude and puts every place
+   in the wrong spot - or on top of its pair, which reads as a blank map.
+   ------------------------------------------------------------------------ */
+const COORD_LON_WORDS = ['lon', 'lng', 'long', 'longitude', 'easting'];
+const COORD_LAT_WORDS = ['lat', 'latitude', 'northing'];
+const COORD_ORIGIN_WORDS = [
+  'origin',
+  'origine',
+  'from',
+  'source',
+  'start',
+  'depart',
+  'departure',
+  'provenance',
+  'emetteur',
+  'sortie',
+];
+const COORD_DEST_WORDS = [
+  'destination',
+  'dest',
+  'to',
+  'target',
+  'end',
+  'arrival',
+  'arrivee',
+  'arrivees',
+  'arriver',
+  'vers',
+  'arriv',
+];
+
+/** A header, accent-stripped and lower-cased, for comparisons. */
+function headerKey(h) {
+  return String(h || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/** The words of a header: "lon_from" -> [lon, from], "LONFROM" -> [lonfrom]. */
+function headerWords(h) {
+  return headerKey(h)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Does one of the words name one of these concepts? Glued forms count only at
+    the edges of a word, so "lonfrom" matches lon and from but "plate" is not a
+    latitude. */
+function wordNames(words, cands) {
+  return words.some(w =>
+    cands.some(c => w === c || (c.length >= 3 && (w.startsWith(c) || w.endsWith(c)))),
+  );
+}
+
+/** lon, lat, or null when the header says nothing usable. */
+function coordAxisOf(header) {
+  const w = headerWords(header);
+  const lon = wordNames(w, COORD_LON_WORDS) || w.includes('x');
+  const lat = wordNames(w, COORD_LAT_WORDS) || (w.includes('y') && !lon);
+  if (lon && lat) return null;
+  return lon ? 'lon' : lat ? 'lat' : null;
+}
+
+/** Which end of the flow the column describes: 'o', 'd', or null (either). */
+function coordSideOf(header) {
+  const w = headerWords(header);
+  const o = wordNames(w, COORD_ORIGIN_WORDS) || w.includes('o');
+  const d = wordNames(w, COORD_DEST_WORDS) || w.includes('d');
+  return o && !d ? 'o' : d && !o ? 'd' : null;
+}
+
+/**
+ * The four coordinate columns, read by name.
+ * A table with one unnamed pair (longitude/latitude, x/y) puts both ends there,
+ * which is how a table of point records is read.
+ */
+function guessCoordinatePair(headers) {
+  const cols = headers.map(h => ({ h, axis: coordAxisOf(h), side: coordSideOf(h) }));
+  const sided = (axis, side) => (cols.find(c => c.axis === axis && c.side === side) || {}).h || '';
+  const free = axis => (cols.find(c => c.axis === axis && !c.side) || {}).h || '';
+  const out = {
+    oLon: sided('lon', 'o'),
+    oLat: sided('lat', 'o'),
+    dLon: sided('lon', 'd'),
+    dLat: sided('lat', 'd'),
+  };
+  // one pair for the whole table: both ends sit there (a table of records)
+  const freeLon = free('lon'),
+    freeLat = free('lat');
+  if (freeLon) {
+    if (!out.oLon) out.oLon = freeLon;
+    if (!out.dLon) out.dLon = freeLon;
+  }
+  if (freeLat) {
+    if (!out.oLat) out.oLat = freeLat;
+    if (!out.dLat) out.dLat = freeLat;
+  }
+  return out;
+}
+
 /** Best header for a role, by hint score then by first-seen order. */
 function guessColumn(headers, role, used = new Set()) {
   let best = null,
@@ -322,33 +432,30 @@ function guessMapping(headers, rows, fields) {
       .find(h => !used.has(h) && /name|place|district|location|site|dest|to/i.test(h));
     if (cand) mapping.dName = cand;
   }
-  if (!mapping.dLon && mapping.oLon) {
-    const i = headers.indexOf(mapping.oLon);
-    const cand = headers[i + 1];
-    if (cand && /lat|y/i.test(cand) && !used.has(cand)) mapping.dLat = cand;
+  // coordinates: the names decide, and the two ends are never mixed
+  const pair = guessCoordinatePair(headers);
+  for (const key of ['oLon', 'oLat', 'dLon', 'dLat'])
+    if (!mapping[key] && pair[key]) mapping[key] = pair[key];
+  // a single pair of numbers with no name for it: take them as the position
+  if (!mapping.oLon && !mapping.dLon) {
+    const lons = headers.filter(h => coordAxisOf(h) === 'lon');
+    if (lons.length === 1) {
+      mapping.oLon = mapping.dLon = lons[0];
+      const lats = headers.filter(h => coordAxisOf(h) === 'lat');
+      if (lats.length === 1) mapping.oLat = mapping.dLat = lats[0];
+    }
   }
-  if (!mapping.dLon && mapping.oLon && mapping.oLat) {
-    const cand = headers
-      .slice(headers.indexOf(mapping.oLat) + 1)
-      .find(h => /lon|x/i.test(h) && !used.has(h));
-    if (cand) mapping.dLon = cand;
-  }
-  if (!mapping.oLon && mapping.dLon) {
-    // coordinates given as a single pair: treat them as both ends' position
-    const ci = headers.indexOf(mapping.dLon);
-    const lat = headers.find(h => /lat|y/i.test(h) && headers.indexOf(h) !== ci);
-    if (lat && !mapping.oLat) mapping.oLat = lat;
-    mapping.oLon = mapping.dLon;
-  }
-  if (mapping.oLon && !mapping.oLat) {
-    const i = headers.indexOf(mapping.oLon);
-    const next = headers[i + 1];
-    if (next && !used.has(next) && columnIsNumeric(rows, next)) mapping.oLat = next;
-  }
-  if (mapping.dLon && !mapping.dLat) {
-    const i = headers.indexOf(mapping.dLon);
-    const next = headers[i + 1];
-    if (next && !used.has(next) && columnIsNumeric(rows, next)) mapping.dLat = next;
+  // the latitude of a pair is the numeric column beside its longitude, when the
+  // header of that one says nothing (lon, lat2, value)
+  for (const side of ['o', 'd']) {
+    const lonKey = side + 'Lon',
+      latKey = side + 'Lat';
+    if (mapping[lonKey] && !mapping[latKey]) {
+      const i = headers.indexOf(mapping[lonKey]);
+      const next = headers[i + 1];
+      if (next && !used.has(next) && columnIsNumeric(rows, next) && !coordAxisOf(next))
+        mapping[latKey] = next;
+    }
   }
   if (!mapping.dName && mapping.oName) mapping.dName = mapping.oName; // point events
   if (!mapping.dLon && mapping.oLon) mapping.dLon = mapping.oLon;

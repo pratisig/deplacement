@@ -40,8 +40,22 @@ it empty and every figure uses the single value, as before.
   origin/destination, coordinates, a date or a day number, and a value — and you
   can correct every choice in the dialog before building the map. Headers in English, French or Spanish are
   recognised (`origine`, `ménages`, `destino`, `fecha`, …).
+- **Coordinate pairs are read by name, never by position.** `lon_from` with
+  `lat_from`, `lon_origine`/`lat_origine`, `o_lon`/`o_lat`, `x_from`/`y_from`,
+  latitude before longitude — all of them work, and the two ends are never
+  mixed. The dialog sums up where the points will land (`Origin lon 42.9…49.1`)
+  and warns when every row starts and ends at the same point, which would draw
+  loops instead of lines.
+- **Shapefiles load too.** Choose a `.zip` holding the `.shp` (with its `.dbf`,
+  and `.shx`/`.prj` when present), or select the `.shp` and `.dbf` together — in
+  the table slot, the boundaries slot or the values-by-area slot. Polygons become
+  map outlines (or areas with a value), points become places with their `.dbf`
+  columns as attributes, and the shapes are read in the browser: nothing is
+  uploaded and nothing is unzipped anywhere else. A layer still in a projected
+  coordinate system (metres instead of degrees) is reported, not drawn in the
+  wrong place.
 - **No coordinates? Add a boundary file** (a GeoJSON FeatureCollection of areas,
-  up to two levels). Places are then matched to areas by name — accents, casing
+  up to two levels, or a polygon shapefile). Places are then matched to areas by name — accents, casing
   and spelling wobbles tolerated — and the areas become the limits layer.
 - **A row can be its own origin and destination** (a self-loop): that counts as
   movement inside the place, which is how the example treats internal
@@ -220,6 +234,7 @@ src/js/                  the app, in load order (no imports; build.mjs concatena
   core.js                DOM handles, theme colours, formatters
   geo.js                 ring areas, centroids, simplification, point-in-polygon
   table.js               CSV/TSV/JSON/GeoJSON reader and column detection
+  shpread.js             shapefile and ZIP reader (.shp/.dbf -> GeoJSON)
   sources.js             table + boundaries -> dataset, geocoding by name
   dataset.js             the active dataset, normalising boundary layers
   projection.js          Web Mercator, tiling, limits projection

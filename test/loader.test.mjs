@@ -703,3 +703,161 @@ test('the loader dialog offers every column and every text, then builds the page
   assert.match(p.els.lgIn.textContent, /Moustiquaires distribuées/);
   assert.equal(p.els.dlg.hidden, true, 'the dialog closes');
 });
+
+/* ------------------------------------------------- 7.7.1: coordinate pairs
+   A flow table names its two ends. Reading the columns by position instead of
+   by name mixed an origin longitude with a destination latitude, which put
+   every place somewhere it is not - or on top of the other end, which reads as
+   a blank map. These cases are the ones that shipped, then broke. */
+const PAIR_CASES = [
+  [
+    'from,to,lon_from,lat_from,lon_to,lat_to,date,households',
+    'lon_from',
+    'lat_from',
+    'lon_to',
+    'lat_to',
+  ],
+  [
+    'from,to,lat_from,lon_from,lat_to,lon_to,date,households',
+    'lon_from',
+    'lat_from',
+    'lon_to',
+    'lat_to',
+  ],
+  [
+    'from,to,lon_to,lat_to,lon_from,lat_from,date,households',
+    'lon_from',
+    'lat_from',
+    'lon_to',
+    'lat_to',
+  ],
+  [
+    'origine,destination,lon_origine,lat_origine,lon_destination,lat_destination,date,menages',
+    'lon_origine',
+    'lat_origine',
+    'lon_destination',
+    'lat_destination',
+  ],
+  ['origin,destination,o_lon,o_lat,d_lon,d_lat,date,value', 'o_lon', 'o_lat', 'd_lon', 'd_lat'],
+  [
+    'de_lon,de_lat,vers_lon,vers_lat,de,vers,date,valeur',
+    'de_lon',
+    'de_lat',
+    'vers_lon',
+    'vers_lat',
+  ],
+  ['x_from,y_from,x_to,y_to,from,to,date,n', 'x_from', 'y_from', 'x_to', 'y_to'],
+  [
+    'origine_lon,origine_lat,destination_lon,destination_lat,origine,destination,date,valeur',
+    'origine_lon',
+    'origine_lat',
+    'destination_lon',
+    'destination_lat',
+  ],
+];
+
+const rowFor = headers => {
+  const out = {};
+  headers.forEach((h, i) => {
+    if (i < 4) out[h] = ['44.2', '15.3', '45.0', '12.8'][i];
+    else if (/^(date|jour)$/i.test(h)) out[h] = '2026-01-04';
+    else if (i === 4) out[h] = 'Sanaa';
+    else if (i === 5) out[h] = 'Aden';
+    else out[h] = '10';
+  });
+  return out;
+};
+
+for (const [line, oLon, oLat, dLon, dLat] of PAIR_CASES) {
+  test('coordinates are paired by name, never across the two ends: ' + line, () => {
+    const headers = line.split(',');
+    const mapping = T.guessMapping(
+      headers,
+      [rowFor(headers)],
+      T.MAPPING_FIELDS.map(f => f[0]),
+    );
+    assert.equal(mapping.oLon, oLon, 'origin longitude');
+    assert.equal(mapping.oLat, oLat, 'origin latitude');
+    assert.equal(mapping.dLon, dLon, 'destination longitude');
+    assert.equal(mapping.dLat, dLat, 'destination latitude');
+  });
+}
+
+test('one pair with no side in its name is the position of both ends', () => {
+  const headers = ['origin', 'destination', 'longitude', 'latitude', 'value'];
+  const mapping = T.guessMapping(
+    headers,
+    [rowFor(headers)],
+    T.MAPPING_FIELDS.map(f => f[0]),
+  );
+  assert.equal(mapping.oLon, 'longitude');
+  assert.equal(mapping.oLat, 'latitude');
+  assert.equal(mapping.dLon, 'longitude');
+  assert.equal(mapping.dLat, 'latitude');
+});
+
+test('the header words are read, not guessed from position', () => {
+  assert.equal(T.coordAxisOf('lon_from'), 'lon');
+  assert.equal(T.coordAxisOf('LAT_DEST'), 'lat');
+  assert.equal(T.coordAxisOf('longitude'), 'lon');
+  assert.equal(T.coordAxisOf('Plate'), null, 'a word that merely contains "lat" is not a latitude');
+  assert.equal(T.coordAxisOf('value'), null);
+  assert.equal(T.coordSideOf('from'), 'o');
+  assert.equal(T.coordSideOf('d_lon'), 'd');
+  assert.equal(T.coordSideOf('lon_origine'), 'o');
+  assert.equal(T.coordSideOf('longitude'), null);
+});
+
+test('the crossed mapping that emptied a map is refused, with the fix in words', () => {
+  const headers = ['from', 'to', 'lon_from', 'lat_from', 'lon_to', 'lat_to', 'date', 'n'];
+  const table = T.parseTable(
+    [headers.join(','), 'Sanaa,Aden,44.2,15.3,45.0,12.8,2026-01-04,10'].join('\n'),
+    'crossed.csv',
+  );
+  // the value the old code produced: origin longitude from the destination
+  const crossed = {
+    oName: 'from',
+    dName: 'to',
+    oLon: 'lat_to',
+    oLat: 'lat_from',
+    dLon: 'lon_to',
+    dLat: 'lat_to',
+    date: 'date',
+    value: 'n',
+  };
+  const issues = T.mappingIssues(crossed, table, []);
+  assert.equal(issues.length > 0, true, 'a longitude of 12.8 is not accepted quietly');
+  assert.match(issues.join(' '), /is a latitude, but it is used for the origin longitude/);
+});
+
+test('the dialog shows where the points will land, and warns about a collapsed table', async () => {
+  const p = loadPage();
+  await p.T.takeTable(
+    new p.File(
+      'ok.csv',
+      [
+        'from,to,lon_from,lat_from,lon_to,lat_to,date,n',
+        'Sanaa,Aden,44.2,15.3,45.0,12.8,2026-01-04,10',
+        'Aden,Sanaa,45.0,12.8,44.2,15.3,2026-01-11,4',
+      ].join('\n'),
+    ),
+  );
+  assert.match(p.els.geoSum.textContent, /Origin lon 44\.20…45\.00/);
+  assert.match(p.els.geoSum.textContent, /lat 12\.80…15\.30/);
+  assert.match(p.els.geoSum.textContent, /Destination lon/);
+  assert.equal(p.els.geoWarn.hidden, true, 'nothing to warn about');
+
+  // both ends on the same point: no line can be drawn, and the dialog says so
+  await p.T.takeTable(
+    new p.File(
+      'same.csv',
+      [
+        'from,to,lon_from,lat_from,lon_to,lat_to,date,n',
+        'Sanaa,Aden,44.2,15.3,44.2,15.3,2026-01-04,10',
+        'Aden,Sanaa,45.0,12.8,45.0,12.8,2026-01-11,4',
+      ].join('\n'),
+    ),
+  );
+  assert.equal(p.els.geoWarn.hidden, false);
+  assert.match(p.els.geoWarn.innerHTML, /same point/);
+});

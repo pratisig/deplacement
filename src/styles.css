@@ -503,6 +503,22 @@ th {
   background: rgba(217, 89, 38, 0.14);
   border: 1px solid rgba(217, 89, 38, 0.45);
 }
+.geosum {
+  margin: 10px 0 0;
+  font: 0.75rem var(--mono);
+  color: var(--muted);
+}
+.geosum:empty {
+  display: none;
+}
+.warnbox {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: rgba(224, 122, 16, 0.12);
+  border: 1px solid rgba(224, 122, 16, 0.4);
+}
 .dlg-actions {
   display: flex;
   gap: 8px;
@@ -710,6 +726,35 @@ dialog.notes::backdrop {
 }
 dialog.notes p {
   font-size: 0.85rem;
+}
+
+/* the background-map choice in the left column: five equal buttons */
+.bggrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+.bggrid button {
+  padding: 6px 2px;
+  font-size: 0.72rem;
+  border: 1px solid var(--line);
+  border-left: 0;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 34px;
+}
+.bggrid button:first-child {
+  border-left: 1px solid var(--line);
+  border-radius: 4px 0 0 4px;
+}
+.bggrid button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.bggrid button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--panel);
+  font-weight: 600;
 }
 
 /* ---- dashboard layout (3 columns) and the light / dark looks ---- */

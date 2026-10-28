@@ -197,6 +197,23 @@ function shapeRecord(shapeType, geometry) {
   const rings = shapeType === SHP_POLYGON ? geometry : [geometry];
   let points = 0;
   for (const r of rings) points += r.length;
+  // Every polyline and polygon record carries its own bounding box (xmin,
+  // ymin, xmax, ymax). Leaving it out is what made a file our own reader - and
+  // any strict one - unable to find the parts: the numbers after the shape
+  // type were read as the box.
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
+  for (const r of rings)
+    for (const [x, y] of r) {
+      if (x < x0) x0 = x;
+      if (y < y0) y0 = y;
+      if (x > x1) x1 = x;
+      if (y > y1) y1 = y;
+    }
+  if (!Number.isFinite(x0)) x0 = y0 = x1 = y1 = 0;
+  w.f64(x0).f64(y0).f64(x1).f64(y1);
   w.i32(rings.length).i32(points);
   let start = 0;
   for (const r of rings) {
@@ -214,7 +231,8 @@ function shapeBounds(shapeType, parts) {
     y1 = -Infinity;
   for (const p of parts) {
     const view = new DataView(p.buffer, p.byteOffset, p.byteLength);
-    const start = shapeType === SHP_POINT ? 4 : 4 + 8 + 4 * view.getInt32(4, true);
+    // content: shape type (4), bbox (32), numParts (4), numPoints (4), parts…
+    const start = shapeType === SHP_POINT ? 4 : 44 + 4 * view.getInt32(36, true);
     for (let i = start; i + 16 <= p.length; i += 16) {
       const x = view.getFloat64(i, true),
         y = view.getFloat64(i + 8, true);

@@ -198,6 +198,132 @@ function validateLoader() {
     err.hidden = true;
     $('#bBuild').disabled = false;
   }
+  // what the chosen columns do, and what would make the map look empty
+  const sum = $('#geoSum');
+  if (sum) {
+    const line = loader.table ? coordinateSummary(loader.mapping, loader.table) : '';
+    sum.textContent = line;
+    sum.hidden = !line;
+  }
+  const warn = $('#geoWarn');
+  if (warn) {
+    const notes = loader.table ? mappingWarnings(loader.mapping, loader.table) : [];
+    warn.innerHTML = notes.map(n => esc(n)).join('<br>');
+    warn.hidden = !notes.length;
+  }
+}
+
+/* ------------------------------------------------------- shapefiles in
+   A .zip (or a .shp chosen with its .dbf) is read into GeoJSON layers, then
+   handed to the same code a GeoJSON file goes through. */
+function bytesOf(file) {
+  if (typeof file.arrayBuffer === 'function')
+    return file.arrayBuffer().then(b => new Uint8Array(b));
+  return readFileText(file).then(t => new TextEncoder().encode(t));
+}
+
+async function readLayers(files) {
+  const { layers, warnings } = await layersFromFiles(files, bytesOf);
+  return { layers, warnings };
+}
+
+function isShapefileChoice(files) {
+  return Array.from(files || []).some(f => /\.(zip|shp|dbf|shx|prj)$/i.test(String(f.name || '')));
+}
+
+/** The layer that suits a slot: outlines want polygons, a table wants points. */
+function layerFor(layers, want) {
+  if (want === 'boundary' || want === 'theme')
+    return layers.find(l => l.kind === 'polygon') || layers.find(l => l.kind === 'geojson') || null;
+  return layers.find(l => l.kind === 'point') || layers[0] || null;
+}
+
+async function takeShapefile(files, slot) {
+  try {
+    const { layers, warnings } = await readLayers(files);
+    const layer = layerFor(layers, slot);
+    if (!layer)
+      throw new Error(
+        slot === 'table'
+          ? 'That shapefile holds no usable layer.'
+          : 'That shapefile has no polygon layer: outlines need polygons.',
+      );
+    const text = JSON.stringify(layer.geojson);
+    if (slot === 'boundary') {
+      if (loader.boundaries.length >= 2) {
+        feedback('Two boundary layers are enough — remove one first.', true);
+        return;
+      }
+      const parsed = parseBoundaryGeoJSON(text, {});
+      loader.boundaries.push({
+        file: layer.name,
+        text,
+        nameProp: parsed.nameProp,
+        properties: layer.fields.filter(f => typeof f === 'string'),
+        parsed,
+      });
+      $('#fileBoundsInfo').textContent =
+        layer.name +
+        ' — ' +
+        parsed.count +
+        ' areas' +
+        (loader.boundaries.length === 1 ? ', add one more layer for finer areas' : '');
+      renderBoundaries();
+      validateLoader();
+      if (warnings.length) feedback(warnings.join(' '), true);
+      return;
+    }
+    if (slot === 'theme') {
+      const picked = themeRowsFromText(text, layer.name);
+      loader.theme = { ...picked, source: 'Loaded from ' + layer.name };
+      $('#fileThemeInfo').textContent =
+        layer.name + ' — ' + picked.count + ' areas, value column "' + picked.label + '"';
+      renderThemeValues();
+      validateLoader();
+      if (warnings.length) feedback(warnings.join(' '), true);
+      return;
+    }
+    // a table: the attributes of the layer, with the geometry as @lon/@lat
+    const table = parseTable(text, layer.name.replace(/\.shp$/i, '.geojson'));
+    loader.table = table;
+    loader.fileName = layer.name;
+    loader.mapping = guessMapping(
+      table.headers,
+      table.rows,
+      MAPPING_FIELDS.map(f => f[0]),
+    );
+    loader.options = {
+      title: '',
+      subtitle: '',
+      unit: '',
+      nodeLabel: 'place',
+      groupLabel: '',
+      inLabel: '',
+      outLabel: '',
+      source: '',
+    };
+    loader.theme = null;
+    if ($('#themeList')) renderThemeValues();
+    $('#fileTableInfo').textContent =
+      layer.name + ' — ' + table.rows.length.toLocaleString('en-US') + ' shapes';
+    $('#tablePanel').hidden = false;
+    renderPreview();
+    renderFields();
+    validateLoader();
+    if (warnings.length) feedback(warnings.join(' '), true);
+  } catch (e) {
+    feedback(e.message, true);
+    $('#err').textContent = e.message;
+    $('#err').hidden = false;
+  }
+}
+
+/** Chosen files, whatever they are: one table, or a shapefile to unpack. */
+async function takeTableFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'table');
+  return takeTable(list[0]);
 }
 
 async function takeTable(file) {
@@ -234,6 +360,13 @@ async function takeTable(file) {
     $('#err').textContent = e.message;
     $('#err').hidden = false;
   }
+}
+
+async function takeBoundaryFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'boundary');
+  return takeBoundary(list[0]);
 }
 
 async function takeBoundary(file) {
@@ -354,6 +487,13 @@ function renderThemeValues() {
   );
 }
 
+async function takeThemeFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'theme');
+  return takeTheme(list[0]);
+}
+
 async function takeTheme(file) {
   try {
     const text = await readFileText(file);
@@ -418,19 +558,10 @@ $('#bLoad').addEventListener('click', openDialog);
 $('#bClose').addEventListener('click', closeDialog);
 $('#bPickTable').addEventListener('click', () => $('#fileTable').click());
 $('#bPickBounds').addEventListener('click', () => $('#fileBounds').click());
-$('#fileTable').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeTable(ev.target.files[0]),
-);
-$('#fileBounds').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeBoundary(ev.target.files[0]),
-);
+$('#fileTable').addEventListener('change', ev => takeTableFiles(ev.target.files));
+$('#fileBounds').addEventListener('change', ev => takeBoundaryFiles(ev.target.files));
 $('#bPickTheme').addEventListener('click', () => $('#fileTheme').click());
-$('#fileTheme').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeTheme(ev.target.files[0]),
-);
+$('#fileTheme').addEventListener('change', ev => takeThemeFiles(ev.target.files));
 $('#bBuild').addEventListener('click', buildFromLoader);
 $('#bTemplate').addEventListener('click', () =>
   downloadBytes('flow-map-template.csv', new TextEncoder().encode(tableTemplate()), 'text/csv'),
@@ -452,13 +583,15 @@ addEventListener('dragleave', () => document.body.classList.remove('dropping'));
 addEventListener('drop', ev => {
   ev.preventDefault();
   document.body.classList.remove('dropping');
-  const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (!file) return;
-  if (!loader.table || !$('#dlg').hidden === false) openDialog();
-  if (/\.(geojson|topojson)$/i.test(file.name) || !loader.table) {
-    if (/\.(geojson|topojson)$/i.test(file.name)) takeBoundary(file);
-    else takeTable(file);
-  } else takeTable(file);
+  const dropped = Array.from((ev.dataTransfer && ev.dataTransfer.files) || []);
+  if (!dropped.length) return;
+  if (!$('#dlg').hidden) closeDialog();
+  openDialog();
+  // a shapefile arrives as several files at once: use them as one layer
+  if (isShapefileChoice(dropped)) return takeTableFiles(dropped);
+  const file = dropped[0];
+  if (/\.(geojson|topojson)$/i.test(file.name)) return takeBoundary(file);
+  return takeTable(file);
 });
 
 /* export menu */

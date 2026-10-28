@@ -212,5 +212,13 @@ function updateStatus() {
   const loops = typeof E !== 'undefined' && E ? E.filter(e => e[1] === e[2]).length : 0;
   if (loops && typeof E !== 'undefined' && loops === E.length)
     s += ' <span class="warn">' + t('bmLoops') + '</span>';
+  // a map with no line on it needs a reason on the page, not a blank view
+  else if (
+    typeof act !== 'undefined' &&
+    act.length &&
+    typeof links !== 'undefined' &&
+    !links.length
+  )
+    s += ' <span class="warn">' + t('bmNoRoutes') + '</span>';
   $('#bm').innerHTML = s;
 }

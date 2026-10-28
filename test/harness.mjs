@@ -314,13 +314,21 @@ export function loadPage({
 
   /* a tiny in-memory File: tests hand these to the loader */
   class FileStub {
-    constructor(name, text) {
+    /** A chosen file: text for a CSV, bytes for a shapefile or a ZIP. */
+    constructor(name, content = '') {
       this.name = name;
-      this._text = text; // never `text`: that name is the reader method
-      this.size = text.length;
+      this._bytes =
+        content instanceof Uint8Array ? content : new TextEncoder().encode(String(content));
+      // never `text`: that name is the reader method
+      this._text = content instanceof Uint8Array ? null : String(content);
+      this.size = this._bytes.length;
     }
     text() {
-      return Promise.resolve(this._text);
+      return Promise.resolve(this._text ?? new TextDecoder().decode(this._bytes));
+    }
+    arrayBuffer() {
+      const b = this._bytes;
+      return Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
     }
   }
 
@@ -460,6 +468,11 @@ export function loadPage({
   mercX, mercY, project, rebuild, draw, size, loadSource, applyMeta, configure,
   curProv, providerFailed, tileFor, setStyle, setBlend, setLimit, limitLayers,
   updateStatus, viewPositions, snapshot, flatToRing,
+  // shapefiles in
+  shapefileToGeoJSON, readShp, readDbf, unzipArchive, inflateRaw, layersFromFiles,
+  takeTableFiles, takeBoundaryFiles, takeThemeFiles, takeShapefile, layerFor,
+  layerLooksProjected, baseNameOf, headerKey, headerWords, coordAxisOf, coordSideOf,
+  guessCoordinatePair, mappingWarnings, coordinateSummary, coordinateReport,
   // data loading
   parseTable, guessMapping, guessColumn, columnIsNumeric, columnIsDate, parseDateValue,
   assembleDataset, parseBoundaryGeoJSON, guessNameProperty, boundaryLookup, keyName,

@@ -512,6 +512,22 @@ th {
   background: rgba(217, 89, 38, 0.14);
   border: 1px solid rgba(217, 89, 38, 0.45);
 }
+.geosum {
+  margin: 10px 0 0;
+  font: 0.75rem var(--mono);
+  color: var(--muted);
+}
+.geosum:empty {
+  display: none;
+}
+.warnbox {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: rgba(224, 122, 16, 0.12);
+  border: 1px solid rgba(224, 122, 16, 0.4);
+}
 .dlg-actions {
   display: flex;
   gap: 8px;
@@ -719,6 +735,35 @@ dialog.notes::backdrop {
 }
 dialog.notes p {
   font-size: 0.85rem;
+}
+
+/* the background-map choice in the left column: five equal buttons */
+.bggrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+.bggrid button {
+  padding: 6px 2px;
+  font-size: 0.72rem;
+  border: 1px solid var(--line);
+  border-left: 0;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 34px;
+}
+.bggrid button:first-child {
+  border-left: 1px solid var(--line);
+  border-radius: 4px 0 0 4px;
+}
+.bggrid button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.bggrid button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--panel);
+  font-weight: 600;
 }
 
 /* ---- dashboard layout (3 columns) and the light / dark looks ---- */
@@ -1512,6 +1557,18 @@ dialog.embdlg .erow select {
     </section>
 
     <section class="card">
+      <h2>Background map</h2>
+      <div class="seg bggrid" role="group" aria-label="Background map" id="bgPick">
+        <button id="bgLight" type="button" aria-pressed="true">Light</button>
+        <button id="bgDark" type="button" aria-pressed="false">Dark</button>
+        <button id="bgTerrain" type="button" aria-pressed="false">Terrain</button>
+        <button id="bgSat" type="button" aria-pressed="false">Satellite</button>
+        <button id="bgNone" type="button" aria-pressed="false">None</button>
+      </div>
+      <p class="phint">Keyless tiles; None draws only your data and boundaries.</p>
+    </section>
+
+    <section class="card">
       <h2>Legend</h2>
       <ul class="legend">
         <li><span class="sw" style="background:var(--recv)"></span><span id="lgIn">More in than out</span></li>
@@ -1607,9 +1664,9 @@ dialog.embdlg .erow select {
     <p class="hint">One row per flow. The columns below are detected from the header row — adjust anything that looks wrong. Nothing leaves your browser.</p>
 
     <div class="drop" id="dropTable">
-      <input type="file" id="fileTable" accept=".csv,.tsv,.txt,.json,.geojson,text/csv,application/json" hidden>
+      <input type="file" id="fileTable" accept=".csv,.tsv,.txt,.json,.geojson,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickTable" type="button">Choose a table…</button>
-      <span class="file" id="fileTableInfo">CSV, TSV or JSON — or drop the file here</span>
+      <span class="file" id="fileTableInfo">CSV, TSV, JSON or GeoJSON — or a shapefile (.zip, or the .shp and .dbf together)</span>
     </div>
 
     <div id="tablePanel" hidden>
@@ -1619,20 +1676,22 @@ dialog.embdlg .erow select {
     </div>
 
     <div class="drop" id="dropBounds">
-      <input type="file" id="fileBounds" accept=".geojson,.json" hidden>
+      <input type="file" id="fileBounds" accept=".geojson,.json,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickBounds" type="button">Add boundaries… (optional)</button>
-      <span class="file" id="fileBoundsInfo">GeoJSON areas: gives map outlines and lets places be found by name</span>
+      <span class="file" id="fileBoundsInfo">GeoJSON areas or a polygon shapefile: gives map outlines and lets places be found by name</span>
     </div>
     <div id="boundsList" class="bounds"></div>
 
     <div class="drop" id="dropTheme">
-      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson" hidden>
+      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickTheme" type="button">Add values by area… (optional)</button>
       <span class="file" id="fileThemeInfo">A polygon layer, or a table of area names and values</span>
     </div>
     <div id="themeList" class="bounds"></div>
 
+    <p class="geosum" id="geoSum"></p>
     <p class="err" id="err" hidden></p>
+    <p class="warnbox" id="geoWarn" hidden></p>
 
     <div class="dlg-actions">
       <button class="act" id="bTemplate" type="button">Template CSV</button>
@@ -3440,9 +3499,13 @@ function geometryRings(geom) {
 
 /** A representative point for a geometry: the centroid of its largest ring. */
 function geometryCentre(geom) {
+  // a point has no ring: read it first, or a layer of points arrives with no
+  // coordinates at all and cannot be placed on the map
+  if (geom && geom.type === 'Point') return [geom.coordinates[0], geom.coordinates[1]];
+  if (geom && geom.type === 'MultiPoint' && geom.coordinates.length)
+    return [geom.coordinates[0][0], geom.coordinates[0][1]];
   const rings = geometryRings(geom).filter(r => r.length >= 2);
   if (!rings.length) return null;
-  if (geom.type === 'Point') return [geom.coordinates[0], geom.coordinates[1]];
   let best = null,
     bestArea = -1;
   for (const ring of rings) {
@@ -3588,6 +3651,112 @@ const FIELD_HINTS = {
   ],
 };
 
+/* ------------------------------------------------------------------------
+   Coordinates. A flow table names its two ends in the headers, so the two
+   coordinate pairs must be read by that name and never by position: with
+   `lon_from, lat_from, lon_to, lat_to`, taking the column next to the origin
+   *name* pairs a longitude with the other end's latitude and puts every place
+   in the wrong spot - or on top of its pair, which reads as a blank map.
+   ------------------------------------------------------------------------ */
+const COORD_LON_WORDS = ['lon', 'lng', 'long', 'longitude', 'easting'];
+const COORD_LAT_WORDS = ['lat', 'latitude', 'northing'];
+const COORD_ORIGIN_WORDS = [
+  'origin',
+  'origine',
+  'from',
+  'source',
+  'start',
+  'depart',
+  'departure',
+  'provenance',
+  'emetteur',
+  'sortie',
+];
+const COORD_DEST_WORDS = [
+  'destination',
+  'dest',
+  'to',
+  'target',
+  'end',
+  'arrival',
+  'arrivee',
+  'arrivees',
+  'arriver',
+  'vers',
+  'arriv',
+];
+
+/** A header, accent-stripped and lower-cased, for comparisons. */
+function headerKey(h) {
+  return String(h || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/** The words of a header: "lon_from" -> [lon, from], "LONFROM" -> [lonfrom]. */
+function headerWords(h) {
+  return headerKey(h)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Does one of the words name one of these concepts? Glued forms count only at
+    the edges of a word, so "lonfrom" matches lon and from but "plate" is not a
+    latitude. */
+function wordNames(words, cands) {
+  return words.some(w =>
+    cands.some(c => w === c || (c.length >= 3 && (w.startsWith(c) || w.endsWith(c)))),
+  );
+}
+
+/** lon, lat, or null when the header says nothing usable. */
+function coordAxisOf(header) {
+  const w = headerWords(header);
+  const lon = wordNames(w, COORD_LON_WORDS) || w.includes('x');
+  const lat = wordNames(w, COORD_LAT_WORDS) || (w.includes('y') && !lon);
+  if (lon && lat) return null;
+  return lon ? 'lon' : lat ? 'lat' : null;
+}
+
+/** Which end of the flow the column describes: 'o', 'd', or null (either). */
+function coordSideOf(header) {
+  const w = headerWords(header);
+  const o = wordNames(w, COORD_ORIGIN_WORDS) || w.includes('o');
+  const d = wordNames(w, COORD_DEST_WORDS) || w.includes('d');
+  return o && !d ? 'o' : d && !o ? 'd' : null;
+}
+
+/**
+ * The four coordinate columns, read by name.
+ * A table with one unnamed pair (longitude/latitude, x/y) puts both ends there,
+ * which is how a table of point records is read.
+ */
+function guessCoordinatePair(headers) {
+  const cols = headers.map(h => ({ h, axis: coordAxisOf(h), side: coordSideOf(h) }));
+  const sided = (axis, side) => (cols.find(c => c.axis === axis && c.side === side) || {}).h || '';
+  const free = axis => (cols.find(c => c.axis === axis && !c.side) || {}).h || '';
+  const out = {
+    oLon: sided('lon', 'o'),
+    oLat: sided('lat', 'o'),
+    dLon: sided('lon', 'd'),
+    dLat: sided('lat', 'd'),
+  };
+  // one pair for the whole table: both ends sit there (a table of records)
+  const freeLon = free('lon'),
+    freeLat = free('lat');
+  if (freeLon) {
+    if (!out.oLon) out.oLon = freeLon;
+    if (!out.dLon) out.dLon = freeLon;
+  }
+  if (freeLat) {
+    if (!out.oLat) out.oLat = freeLat;
+    if (!out.dLat) out.dLat = freeLat;
+  }
+  return out;
+}
+
 /** Best header for a role, by hint score then by first-seen order. */
 function guessColumn(headers, role, used = new Set()) {
   let best = null,
@@ -3671,33 +3840,30 @@ function guessMapping(headers, rows, fields) {
       .find(h => !used.has(h) && /name|place|district|location|site|dest|to/i.test(h));
     if (cand) mapping.dName = cand;
   }
-  if (!mapping.dLon && mapping.oLon) {
-    const i = headers.indexOf(mapping.oLon);
-    const cand = headers[i + 1];
-    if (cand && /lat|y/i.test(cand) && !used.has(cand)) mapping.dLat = cand;
+  // coordinates: the names decide, and the two ends are never mixed
+  const pair = guessCoordinatePair(headers);
+  for (const key of ['oLon', 'oLat', 'dLon', 'dLat'])
+    if (!mapping[key] && pair[key]) mapping[key] = pair[key];
+  // a single pair of numbers with no name for it: take them as the position
+  if (!mapping.oLon && !mapping.dLon) {
+    const lons = headers.filter(h => coordAxisOf(h) === 'lon');
+    if (lons.length === 1) {
+      mapping.oLon = mapping.dLon = lons[0];
+      const lats = headers.filter(h => coordAxisOf(h) === 'lat');
+      if (lats.length === 1) mapping.oLat = mapping.dLat = lats[0];
+    }
   }
-  if (!mapping.dLon && mapping.oLon && mapping.oLat) {
-    const cand = headers
-      .slice(headers.indexOf(mapping.oLat) + 1)
-      .find(h => /lon|x/i.test(h) && !used.has(h));
-    if (cand) mapping.dLon = cand;
-  }
-  if (!mapping.oLon && mapping.dLon) {
-    // coordinates given as a single pair: treat them as both ends' position
-    const ci = headers.indexOf(mapping.dLon);
-    const lat = headers.find(h => /lat|y/i.test(h) && headers.indexOf(h) !== ci);
-    if (lat && !mapping.oLat) mapping.oLat = lat;
-    mapping.oLon = mapping.dLon;
-  }
-  if (mapping.oLon && !mapping.oLat) {
-    const i = headers.indexOf(mapping.oLon);
-    const next = headers[i + 1];
-    if (next && !used.has(next) && columnIsNumeric(rows, next)) mapping.oLat = next;
-  }
-  if (mapping.dLon && !mapping.dLat) {
-    const i = headers.indexOf(mapping.dLon);
-    const next = headers[i + 1];
-    if (next && !used.has(next) && columnIsNumeric(rows, next)) mapping.dLat = next;
+  // the latitude of a pair is the numeric column beside its longitude, when the
+  // header of that one says nothing (lon, lat2, value)
+  for (const side of ['o', 'd']) {
+    const lonKey = side + 'Lon',
+      latKey = side + 'Lat';
+    if (mapping[lonKey] && !mapping[latKey]) {
+      const i = headers.indexOf(mapping[lonKey]);
+      const next = headers[i + 1];
+      if (next && !used.has(next) && columnIsNumeric(rows, next) && !coordAxisOf(next))
+        mapping[latKey] = next;
+    }
   }
   if (!mapping.dName && mapping.oName) mapping.dName = mapping.oName; // point events
   if (!mapping.dLon && mapping.oLon) mapping.dLon = mapping.oLon;
@@ -3750,6 +3916,417 @@ const MAPPING_FIELDS = [
   ['value', 'Value', true],
   ['valueIn', 'Arrival value (optional)', false],
 ];
+
+/* Shapefile reader: a shapefile (.shp + .dbf, usually zipped with .shx and
+   .prj) becomes GeoJSON, so a layer from ArcGIS, QGIS or any download can be
+   dropped on the page like a GeoJSON file. Plain bytes in, objects out — no
+   DOM, no library, which is what makes it testable in Node and usable from
+   file://. */
+
+const SHP_NULL = 0,
+  SHP_POINTS = [1, 11, 21],
+  SHP_LINES = [3, 13, 23],
+  SHP_POLYGONS = [5, 15, 25],
+  SHP_MULTIPOINTS = [8, 18, 28];
+
+/* --------------------------------------------------------------------- zip */
+function be16(b, i) {
+  return (b[i] << 8) | b[i + 1];
+}
+function be32(b, i) {
+  return ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+}
+function le16(b, i) {
+  return b[i] | (b[i + 1] << 8);
+}
+function le32(b, i) {
+  return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
+}
+function le64(b, i) {
+  return le32(b, i) + le32(b, i + 4) * 4294967296;
+}
+
+/** deflate-raw, through the browser's own decoder (no bundled inflater). */
+async function inflateRaw(bytes) {
+  if (typeof DecompressionStream !== 'function')
+    throw new Error(
+      'This browser cannot unzip deflate archives. Unzip the shapefile and choose the .shp and .dbf files together instead.',
+    );
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const out = await new Response(stream).arrayBuffer();
+  return new Uint8Array(out);
+}
+
+/**
+ * A ZIP archive -> Map(name -> Uint8Array). Stored and deflated entries are
+ * both read; the central directory is used, so a prefix (self-extracting
+ * archive) does not confuse it.
+ */
+async function unzipArchive(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0 && i > b.length - 22 - 65536; i--)
+    if (le32(b, i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  if (eocd < 0) throw new Error('That file is not a ZIP archive.');
+  const count = le16(b, eocd + 10);
+  let at = le32(b, eocd + 16);
+  const files = new Map();
+  for (let n = 0; n < count; n++) {
+    if (le32(b, at) !== 0x02014b50) break;
+    const method = le16(b, at + 10);
+    const compressed = le32(b, at + 20);
+    const nameLen = le16(b, at + 28);
+    const extraLen = le16(b, at + 30);
+    const commentLen = le16(b, at + 32);
+    const localAt = le32(b, at + 42);
+    const name = new TextDecoder('utf-8').decode(b.subarray(at + 46, at + 46 + nameLen));
+    at += 46 + nameLen + extraLen + commentLen;
+    if (name.endsWith('/')) continue;
+    if (le32(b, localAt) !== 0x04034b50) continue;
+    const dataAt = localAt + 30 + le16(b, localAt + 26) + le16(b, localAt + 28);
+    const raw = b.subarray(dataAt, dataAt + compressed);
+    if (method === 0) files.set(name, raw);
+    else if (method === 8) files.set(name, await inflateRaw(raw));
+    else throw new Error('That ZIP uses an unsupported compression method (' + method + ').');
+  }
+  if (!files.size) throw new Error('That ZIP is empty.');
+  return files;
+}
+
+/* --------------------------------------------------------------------- dbf */
+function decodeText(bytes) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+/**
+ * The attribute table: { fields: [{name, type, width, decimals}], records: [{…}] }.
+ * Only the value bytes are decoded; the shape is in the .shp.
+ */
+function readDbf(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length < 32) throw new Error('The .dbf file is too short to hold a table.');
+  const count = le32(b, 4);
+  const headerLength = le16(b, 8);
+  const recordLength = le16(b, 10);
+  const fields = [];
+  for (let at = 32; at + 32 <= headerLength - 1; at += 32) {
+    if (b[at] === 0x0d) break;
+    let end = at;
+    while (end < at + 11 && b[end] !== 0) end++;
+    const name = new TextDecoder('latin1').decode(b.subarray(at, end)).trim();
+    if (!name) continue;
+    fields.push({
+      name,
+      type: String.fromCharCode(b[at + 11] || 0x43),
+      width: b[at + 16],
+      decimals: b[at + 17],
+    });
+  }
+  if (!fields.length) throw new Error('The .dbf file has no columns.');
+  const records = [];
+  for (let i = 0; i < count; i++) {
+    const start = headerLength + i * recordLength;
+    if (start + recordLength > b.length) break;
+    if (b[start] === 0x2a) continue; // deleted record
+    const rec = {};
+    let at = start + 1;
+    for (const f of fields) {
+      const cell = b.subarray(at, at + f.width);
+      at += f.width;
+      let text = decodeText(cell);
+      // N/F are right-aligned numbers, C/L/D are text (dates keep their form)
+      text = text.replace(/\u0000/g, '').trim();
+      if (f.type === 'N' || f.type === 'F') {
+        const n = text === '' ? NaN : Number(text.replace(/,/g, ''));
+        rec[f.name] = Number.isFinite(n) ? n : '';
+      } else rec[f.name] = text;
+    }
+    records.push(rec);
+  }
+  return { fields, records };
+}
+
+/* --------------------------------------------------------------------- shp */
+/** Signed area of a ring; the sign tells an outer ring from a hole. */
+function ringSignedArea(ring) {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
+    a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  return a / 2;
+}
+
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0],
+      yi = ring[i][1],
+      xj = ring[j][0],
+      yj = ring[j][1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Shapefile geometry -> GeoJSON geometry.
+ * Polygons: an outer ring is clockwise in a shapefile, and every ring after it
+ * that sits inside belongs to it as a hole; several outers make a MultiPolygon.
+ */
+function shapeGeometry(kind, rings, points) {
+  if (kind === 'point') return { type: 'Point', coordinates: points[0] };
+  if (kind === 'multipoint')
+    return points.length === 1
+      ? { type: 'Point', coordinates: points[0] }
+      : { type: 'MultiPoint', coordinates: points };
+  if (kind === 'line')
+    return rings.length === 1
+      ? { type: 'LineString', coordinates: rings[0] }
+      : { type: 'MultiLineString', coordinates: rings };
+  // polygons
+  const outers = [],
+    holes = [];
+  for (const ring of rings) {
+    if (ring.length < 4) continue;
+    // positive area (counter-clockwise) is an outer ring once the y axis is up
+    if (ringSignedArea(ring) > 0) outers.push([ring]);
+    else holes.push(ring);
+  }
+  if (!outers.length && holes.length) {
+    // every ring wound the other way: the biggest one is the outer ring
+    const sorted = holes
+      .slice()
+      .sort((a, b) => Math.abs(ringSignedArea(b)) - Math.abs(ringSignedArea(a)));
+    outers.push([sorted.shift()]);
+    holes.length = 0;
+    holes.push(...sorted);
+  }
+  for (const hole of holes) {
+    const host = outers.find(o => pointInRing(hole[0][0], hole[0][1], o[0])) || outers[0] || null;
+    if (host) host.push(hole);
+    else outers.push([hole]);
+  }
+  if (!outers.length) return null;
+  const close = ring =>
+    ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+      ? ring
+      : ring.concat([ring[0]]);
+  const polys = outers.map(rings2 => rings2.map(close));
+  return polys.length === 1
+    ? { type: 'Polygon', coordinates: polys[0] }
+    : { type: 'MultiPolygon', coordinates: polys };
+}
+
+/** The shapes of a .shp file: [{ kind, geometry }], in file order. */
+function readShp(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length < 100 || be32(b, 0) !== 9994)
+    throw new Error('That file is not a shapefile (.shp).');
+  // DataView, not Int32Array: a file read out of a ZIP starts at any offset
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const fileType = dv.getInt32(32, true);
+  const shapes = [];
+  let at = 100;
+  while (at + 8 <= b.length) {
+    const contentLength = be32(b, at + 4) * 2;
+    const start = at + 8;
+    if (contentLength <= 0 || start + contentLength > b.length) break;
+    const type = dv.getInt32(start, true);
+    if (type === SHP_NULL) {
+      shapes.push({ kind: 'null', geometry: null });
+    } else if (SHP_POINTS.includes(type)) {
+      shapes.push({
+        kind: 'point',
+        geometry: shapeGeometry(
+          'point',
+          [],
+          [[dv.getFloat64(start + 4, true), dv.getFloat64(start + 12, true)]],
+        ),
+      });
+    } else if (SHP_MULTIPOINTS.includes(type)) {
+      const n = dv.getInt32(start + 36, true);
+      const pts = [];
+      for (let i = 0; i < n; i++)
+        pts.push([
+          dv.getFloat64(start + 40 + i * 16, true),
+          dv.getFloat64(start + 48 + i * 16, true),
+        ]);
+      shapes.push({ kind: 'multipoint', geometry: shapeGeometry('multipoint', [], pts) });
+    } else if (SHP_LINES.includes(type) || SHP_POLYGONS.includes(type)) {
+      const nParts = dv.getInt32(start + 36, true);
+      const nPoints = dv.getInt32(start + 40, true);
+      const parts = [];
+      for (let i = 0; i < nParts; i++) parts.push(dv.getInt32(start + 44 + i * 4, true));
+      const ptsAt = start + 44 + nParts * 4;
+      const rings = [];
+      for (let p = 0; p < nParts; p++) {
+        const from = parts[p],
+          to = p + 1 < nParts ? parts[p + 1] : nPoints;
+        const ring = [];
+        for (let i = from; i < to; i++)
+          ring.push([dv.getFloat64(ptsAt + i * 16, true), dv.getFloat64(ptsAt + i * 16 + 8, true)]);
+        rings.push(ring);
+      }
+      const kind = SHP_POLYGONS.includes(type) ? 'polygon' : 'line';
+      shapes.push({ kind, geometry: shapeGeometry(kind, rings, []) });
+    } else {
+      shapes.push({ kind: 'unsupported', type, geometry: null });
+    }
+    at = start + contentLength;
+  }
+  return { fileType, shapes };
+}
+
+/* --------------------------------------------------------------- assembly */
+/** Does this look like degrees? A projected layer is in metres and cannot be
+    drawn on a web map without reprojection. */
+function layerLooksProjected(shapes) {
+  let x0 = Infinity,
+    x1 = -Infinity,
+    y0 = Infinity,
+    y1 = -Infinity;
+  const take = ([x, y]) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    x0 = Math.min(x0, x);
+    x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y);
+    y1 = Math.max(y1, y);
+  };
+  for (const s of shapes.slice(0, 400)) {
+    if (!s.geometry) continue;
+    if (s.geometry.type === 'Point') take(s.geometry.coordinates);
+    else if (s.geometry.type === 'MultiPoint' || s.geometry.type === 'LineString')
+      s.geometry.coordinates.forEach(take);
+    else if (s.geometry.type === 'MultiLineString' || s.geometry.type === 'Polygon')
+      s.geometry.coordinates.forEach(r => r.forEach(take));
+    else if (s.geometry.type === 'MultiPolygon')
+      s.geometry.coordinates.forEach(p => p.forEach(r => r.forEach(take)));
+  }
+  if (!Number.isFinite(x0)) return false;
+  return x1 > 180 || x0 < -180 || y1 > 90 || y0 < -90;
+}
+
+/**
+ * A .shp (+ optional .dbf) -> { kind, geojson, fields }. Each shape becomes a
+ * feature, its attributes copied across; the field names are kept as written
+ * (dBase allows 10 characters, which is not the caller's fault).
+ */
+function shapefileToGeoJSON({ shp, dbf }) {
+  const { shapes } = readShp(shp);
+  const table = dbf ? readDbf(dbf) : null;
+  const features = [];
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    if (!s.geometry) continue;
+    const properties = table && table.records[i] ? { ...table.records[i] } : {};
+    features.push({ type: 'Feature', properties, geometry: s.geometry });
+  }
+  const kinds = [...new Set(features.map(f => f.geometry.type))];
+  const kind = kinds.some(k => /Polygon/.test(k))
+    ? 'polygon'
+    : kinds.some(k => /Line/.test(k))
+      ? 'line'
+      : 'point';
+  const geojson = { type: 'FeatureCollection', features };
+  return {
+    kind,
+    geojson,
+    fields: table ? table.fields.map(f => f.name) : [],
+    projected: layerLooksProjected(shapes),
+  };
+}
+
+/** The name without its extension, lower-cased, to pair .shp with .dbf. */
+function baseNameOf(name) {
+  return String(name)
+    .replace(/^.*[\\/]/, '')
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase();
+}
+
+/**
+ * Whatever the user chose — one .zip, or a .shp/.dbf/.shx/.prj selection —
+ * becomes a list of GeoJSON layers: [{ name, kind, geojson, fields }].
+ */
+async function layersFromFiles(files, readBytes) {
+  const list = Array.from(files || []);
+  if (!list.length) throw new Error('No file was chosen.');
+  const read = readBytes || (file => file.arrayBuffer().then(b => new Uint8Array(b)));
+  const layers = [];
+  const warnings = [];
+  const loose = [];
+  for (const file of list) {
+    const name = String(file.name || '');
+    if (!/\.zip$/i.test(name)) {
+      loose.push(file);
+      continue;
+    }
+    const entries = await unzipArchive(await read(file));
+    const byName = new Map();
+    for (const [entry, bytes] of entries) byName.set(entry.toLowerCase(), bytes);
+    const shps = [...byName.keys()].filter(n => n.endsWith('.shp'));
+    if (!shps.length)
+      throw new Error(
+        'That ZIP holds no .shp file' +
+          (byName.size ? ' (it has: ' + [...byName.keys()].slice(0, 6).join(', ') + ')' : '') +
+          '.',
+      );
+    for (const shpName of shps) {
+      const base = shpName.replace(/\.shp$/, '');
+      const shp = byName.get(shpName);
+      const dbf = byName.get(base + '.dbf');
+      if (!dbf) warnings.push('No .dbf beside ' + shpName + ': the layer has no attribute table.');
+      const layer = shapefileToGeoJSON({ shp, dbf });
+      layers.push({ name: shpName.replace(/^.*\//, ''), ...layer });
+    }
+  }
+  // loose files, grouped by base name: map.shp + map.dbf + map.shx + map.prj
+  const groups = new Map();
+  for (const file of loose) {
+    const base = baseNameOf(file.name);
+    if (!groups.has(base)) groups.set(base, {});
+    groups.get(base)[String(file.name).split('.').pop().toLowerCase()] = file;
+  }
+  for (const [base, group] of groups) {
+    if (group.shp) {
+      const dbf = group.dbf ? await read(group.dbf) : null;
+      const layer = shapefileToGeoJSON({ shp: await read(group.shp), dbf });
+      layers.push({ name: base + '.shp', ...layer });
+    } else if (group.geojson || group.json) {
+      const bytes = await read(group.geojson || group.json);
+      const parsed = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+      layers.push({
+        name: base + '.geojson',
+        kind: 'geojson',
+        geojson: parsed,
+        fields: Object.keys(
+          (parsed.features && parsed.features[0] && parsed.features[0].properties) || {},
+        ),
+      });
+    } else if (group.dbf) {
+      warnings.push(
+        base + '.dbf has no ' + base + '.shp beside it: only attributes are available.',
+      );
+    }
+  }
+  if (!layers.length)
+    throw new Error(
+      'No shapefile found. Choose a .zip holding the .shp and .dbf, or select both files together.',
+    );
+  for (const layer of layers)
+    if (layer.projected)
+      warnings.push(
+        layer.name +
+          ' is in a projected coordinate system (metres, not degrees). Reproject it to WGS 84 (EPSG:4326) and load it again.',
+      );
+  return { layers, warnings };
+}
 
 /* Sources: read files the user drops in, turn a mapped table (+ optional
    boundary files) into the dataset shape the app draws, and geocode places by
@@ -4198,6 +4775,49 @@ function assembleDataset({ table, mapping, boundaries = [], options = {}, theme 
 }
 
 /** Field list for the mapping form, with per-field validity notes. */
+/** The numbers of one column, as far as they can be read. */
+function columnNumbers(table, header, limit = 300) {
+  const out = [];
+  for (const row of table.rows.slice(0, limit)) {
+    const v = num(row[header]);
+    if (v !== null) out.push(v);
+  }
+  return out;
+}
+
+/** Share of the sampled values that fall outside a range. */
+function outsideShare(values, lo, hi) {
+  if (!values.length) return 0;
+  let bad = 0;
+  for (const v of values) if (v < lo || v > hi) bad++;
+  return bad / values.length;
+}
+
+/** The four coordinate columns the mapping points at, with their spread. */
+function coordinateReport(mapping, table) {
+  const has = c => Boolean(c && table.headers.includes(c));
+  const pair = (lonKey, latKey, side) => {
+    const lon = has(mapping[lonKey]) ? mapping[lonKey] : '',
+      lat = has(mapping[latKey]) ? mapping[latKey] : '';
+    if (!lon && !lat) return null;
+    const lons = lon ? columnNumbers(table, lon) : [],
+      lats = lat ? columnNumbers(table, lat) : [];
+    return {
+      side,
+      lon,
+      lat,
+      lons,
+      lats,
+      lonBad: outsideShare(lons, -180, 180),
+      latBad: outsideShare(lats, -90, 90),
+      lonSpan: lons.length ? Math.max(...lons) - Math.min(...lons) : 0,
+      latSpan: lats.length ? Math.max(...lats) - Math.min(...lats) : 0,
+    };
+  };
+  return [pair('oLon', 'oLat', 'origin'), pair('dLon', 'dLat', 'destination')].filter(Boolean);
+}
+
+/** Problems that would draw nothing, or draw it in the wrong place. */
 function mappingIssues(mapping, table, boundaries) {
   const issues = [];
   const has = c => Boolean(c && table.headers.includes(c));
@@ -4208,7 +4828,141 @@ function mappingIssues(mapping, table, boundaries) {
     (has(mapping.oLon) && has(mapping.oLat)) || (has(mapping.dLon) && has(mapping.dLat));
   if (!coords && !boundaries.length)
     issues.push('Without coordinates, load a boundary file so places can be matched by name.');
+
+  // A column whose own header says "latitude", or says the other end, is the
+  // crossing that put every place in the wrong spot. The names are unambig-
+  // uous here, so this is a refusal, not a guess.
+  const AXIS_WORD = { lon: 'a longitude', lat: 'a latitude' };
+  for (const [key, want] of [
+    ['oLon', 'lon'],
+    ['oLat', 'lat'],
+    ['dLon', 'lon'],
+    ['dLat', 'lat'],
+  ]) {
+    const col = mapping[key];
+    if (!has(col)) continue;
+    const axis = coordAxisOf(col);
+    const side = coordSideOf(col);
+    const wantSide = key[0] === 'o' ? 'o' : 'd';
+    if (axis && axis !== want)
+      issues.push(
+        'The column "' +
+          col +
+          '" is ' +
+          AXIS_WORD[axis] +
+          ', but it is used for the ' +
+          (key[0] === 'o' ? 'origin' : 'destination') +
+          ' ' +
+          (want === 'lon' ? 'longitude' : 'latitude') +
+          '. Pick the right column.',
+      );
+    else if (side && side !== wantSide)
+      issues.push(
+        'The column "' +
+          col +
+          '" names the ' +
+          (side === 'o' ? 'origin' : 'destination') +
+          ', but it is in the ' +
+          (key[0] === 'o' ? 'origin' : 'destination') +
+          ' ' +
+          want +
+          ' slot. Pick the right column.',
+      );
+  }
+
+  for (const c of coordinateReport(mapping, table)) {
+    const where = c.side === 'origin' ? 'origin' : 'destination';
+    if (c.lonBad > 0.2)
+      issues.push(
+        'The ' +
+          where +
+          ' longitude column "' +
+          c.lon +
+          '" holds values that cannot be a longitude (over 180). ' +
+          (c.lat && c.lonBad > 0.8 && outsideShare(c.lats, -90, 90) === 0
+            ? 'The longitude and latitude columns look swapped: put "' +
+              c.lat +
+              '" in longitude and "' +
+              c.lon +
+              '" in latitude.'
+            : 'Pick the longitude column again.'),
+      );
+    else if (c.latBad > 0.2)
+      issues.push(
+        'The ' +
+          where +
+          ' latitude column "' +
+          c.lat +
+          '" holds values that cannot be a latitude (over 90). Pick the right column.',
+      );
+  }
   return issues;
+}
+
+/**
+ * Notes that do not stop the build but explain a map that looks empty:
+ * two ends on the same point, a pair of columns that never moves, and so on.
+ */
+function mappingWarnings(mapping, table) {
+  const notes = [];
+  const report = coordinateReport(mapping, table);
+  const rows = table.rows.slice(0, 300);
+  const has = c => Boolean(c && table.headers.includes(c));
+  const samePairs =
+    has(mapping.oLon) &&
+    has(mapping.dLon) &&
+    has(mapping.oLat) &&
+    has(mapping.dLat) &&
+    (mapping.oLon !== mapping.dLon || mapping.oLat !== mapping.dLat);
+  if (samePairs) {
+    let same = 0,
+      seen = 0;
+    for (const row of rows) {
+      const a = num(row[mapping.oLon]),
+        b = num(row[mapping.oLat]),
+        c2 = num(row[mapping.dLon]),
+        d2 = num(row[mapping.dLat]);
+      if (a === null || b === null || c2 === null || d2 === null) continue;
+      seen++;
+      if (Math.abs(a - c2) < 1e-4 && Math.abs(b - d2) < 1e-4) same++;
+    }
+    if (seen && same === seen)
+      notes.push(
+        'Every row starts and ends at the same point, so no line can be drawn: check that the origin and destination coordinate columns are not the same pair.',
+      );
+    else if (seen && same / seen > 0.9)
+      notes.push(
+        Math.round((same / seen) * 100) +
+          ' % of the rows start and end at the same point: the map will show loops, not lines.',
+      );
+  }
+  for (const c of report) {
+    if (c.lons.length < 2) continue;
+    if (c.lonSpan < 1e-6 && c.latSpan < 1e-6)
+      notes.push(
+        'Every ' +
+          (c.side === 'origin' ? 'origin' : 'destination') +
+          ' point is at the same place.',
+      );
+  }
+  return notes;
+}
+
+/** One line for the dialog: how many places, and where they are. */
+function coordinateSummary(mapping, table) {
+  const report = coordinateReport(mapping, table);
+  if (!report.length) return '';
+  const bits = report.map(c => {
+    if (!c.lons.length && !c.lats.length) return '';
+    const lon = c.lons.length
+      ? Math.min(...c.lons).toFixed(2) + '…' + Math.max(...c.lons).toFixed(2)
+      : '?';
+    const lat = c.lats.length
+      ? Math.min(...c.lats).toFixed(2) + '…' + Math.max(...c.lats).toFixed(2)
+      : '?';
+    return (c.side === 'origin' ? 'Origin' : 'Destination') + ' lon ' + lon + ', lat ' + lat;
+  });
+  return bits.filter(Boolean).join('  ·  ');
 }
 
 /** A small CSV the user can fill in, written from the current mapping. */
@@ -4316,6 +5070,9 @@ function buildBounds(src, nodes) {
     c = Infinity,
     d = -Infinity;
   for (const n of nodes) {
+    // one unreadable coordinate must not turn the whole frame into NaN, which
+    // draws nothing at all and looks like a broken page
+    if (!Number.isFinite(n.lon) || !Number.isFinite(n.lat)) continue;
     a = Math.min(a, n.lon);
     b = Math.max(b, n.lon);
     c = Math.min(c, n.lat);
@@ -4796,6 +5553,14 @@ function updateStatus() {
   const loops = typeof E !== 'undefined' && E ? E.filter(e => e[1] === e[2]).length : 0;
   if (loops && typeof E !== 'undefined' && loops === E.length)
     s += ' <span class="warn">' + t('bmLoops') + '</span>';
+  // a map with no line on it needs a reason on the page, not a blank view
+  else if (
+    typeof act !== 'undefined' &&
+    act.length &&
+    typeof links !== 'undefined' &&
+    !links.length
+  )
+    s += ' <span class="warn">' + t('bmNoRoutes') + '</span>';
   $('#bm').innerHTML = s;
 }
 
@@ -5761,6 +6526,23 @@ function shapeRecord(shapeType, geometry) {
   const rings = shapeType === SHP_POLYGON ? geometry : [geometry];
   let points = 0;
   for (const r of rings) points += r.length;
+  // Every polyline and polygon record carries its own bounding box (xmin,
+  // ymin, xmax, ymax). Leaving it out is what made a file our own reader - and
+  // any strict one - unable to find the parts: the numbers after the shape
+  // type were read as the box.
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
+  for (const r of rings)
+    for (const [x, y] of r) {
+      if (x < x0) x0 = x;
+      if (y < y0) y0 = y;
+      if (x > x1) x1 = x;
+      if (y > y1) y1 = y;
+    }
+  if (!Number.isFinite(x0)) x0 = y0 = x1 = y1 = 0;
+  w.f64(x0).f64(y0).f64(x1).f64(y1);
   w.i32(rings.length).i32(points);
   let start = 0;
   for (const r of rings) {
@@ -5778,7 +6560,8 @@ function shapeBounds(shapeType, parts) {
     y1 = -Infinity;
   for (const p of parts) {
     const view = new DataView(p.buffer, p.byteOffset, p.byteLength);
-    const start = shapeType === SHP_POINT ? 4 : 4 + 8 + 4 * view.getInt32(4, true);
+    // content: shape type (4), bbox (32), numParts (4), numPoints (4), parts…
+    const start = shapeType === SHP_POINT ? 4 : 44 + 4 * view.getInt32(36, true);
     for (let i = start; i + 16 <= p.length; i += 16) {
       const x = view.getFloat64(i, true),
         y = view.getFloat64(i + 8, true);
@@ -7214,8 +7997,16 @@ function setStyle(s) {
     for (const key of [...TILES.keys()])
       if (key.startsWith(p + '|') && TILES.get(key).err) TILES.delete(key);
   }
-  const ids = { dark: 'bDark', light: 'bLight', terrain: 'bTerrain', sat: 'bSat', none: 'bNone' };
-  for (const k in ids) $('#' + ids[k]).setAttribute('aria-pressed', k === s ? 'true' : 'false');
+  const ids = {
+    dark: ['bDark', 'bgDark'],
+    light: ['bLight', 'bgLight'],
+    terrain: ['bTerrain', 'bgTerrain'],
+    sat: ['bSat', 'bgSat'],
+    none: ['bNone', 'bgNone'],
+  };
+  for (const k in ids)
+    for (const id of ids[k])
+      if ($('#' + id)) $('#' + id).setAttribute('aria-pressed', k === s ? 'true' : 'false');
   updateStatus();
   if (RM) draw(0);
 }
@@ -7258,6 +8049,15 @@ $('#bLight').addEventListener('click', () => setStyle('light'));
 $('#bTerrain').addEventListener('click', () => setStyle('terrain'));
 $('#bSat').addEventListener('click', () => setStyle('sat'));
 $('#bNone').addEventListener('click', () => setStyle('none'));
+// the same choice, in the left column, where it cannot be missed
+for (const [id, s2] of [
+  ['bgLight', 'light'],
+  ['bgDark', 'dark'],
+  ['bgTerrain', 'terrain'],
+  ['bgSat', 'sat'],
+  ['bgNone', 'none'],
+])
+  if ($('#' + id)) $('#' + id).addEventListener('click', () => setStyle(s2));
 
 /* pointer */
 function pick(ev) {
@@ -7653,6 +8453,132 @@ function validateLoader() {
     err.hidden = true;
     $('#bBuild').disabled = false;
   }
+  // what the chosen columns do, and what would make the map look empty
+  const sum = $('#geoSum');
+  if (sum) {
+    const line = loader.table ? coordinateSummary(loader.mapping, loader.table) : '';
+    sum.textContent = line;
+    sum.hidden = !line;
+  }
+  const warn = $('#geoWarn');
+  if (warn) {
+    const notes = loader.table ? mappingWarnings(loader.mapping, loader.table) : [];
+    warn.innerHTML = notes.map(n => esc(n)).join('<br>');
+    warn.hidden = !notes.length;
+  }
+}
+
+/* ------------------------------------------------------- shapefiles in
+   A .zip (or a .shp chosen with its .dbf) is read into GeoJSON layers, then
+   handed to the same code a GeoJSON file goes through. */
+function bytesOf(file) {
+  if (typeof file.arrayBuffer === 'function')
+    return file.arrayBuffer().then(b => new Uint8Array(b));
+  return readFileText(file).then(t => new TextEncoder().encode(t));
+}
+
+async function readLayers(files) {
+  const { layers, warnings } = await layersFromFiles(files, bytesOf);
+  return { layers, warnings };
+}
+
+function isShapefileChoice(files) {
+  return Array.from(files || []).some(f => /\.(zip|shp|dbf|shx|prj)$/i.test(String(f.name || '')));
+}
+
+/** The layer that suits a slot: outlines want polygons, a table wants points. */
+function layerFor(layers, want) {
+  if (want === 'boundary' || want === 'theme')
+    return layers.find(l => l.kind === 'polygon') || layers.find(l => l.kind === 'geojson') || null;
+  return layers.find(l => l.kind === 'point') || layers[0] || null;
+}
+
+async function takeShapefile(files, slot) {
+  try {
+    const { layers, warnings } = await readLayers(files);
+    const layer = layerFor(layers, slot);
+    if (!layer)
+      throw new Error(
+        slot === 'table'
+          ? 'That shapefile holds no usable layer.'
+          : 'That shapefile has no polygon layer: outlines need polygons.',
+      );
+    const text = JSON.stringify(layer.geojson);
+    if (slot === 'boundary') {
+      if (loader.boundaries.length >= 2) {
+        feedback('Two boundary layers are enough — remove one first.', true);
+        return;
+      }
+      const parsed = parseBoundaryGeoJSON(text, {});
+      loader.boundaries.push({
+        file: layer.name,
+        text,
+        nameProp: parsed.nameProp,
+        properties: layer.fields.filter(f => typeof f === 'string'),
+        parsed,
+      });
+      $('#fileBoundsInfo').textContent =
+        layer.name +
+        ' — ' +
+        parsed.count +
+        ' areas' +
+        (loader.boundaries.length === 1 ? ', add one more layer for finer areas' : '');
+      renderBoundaries();
+      validateLoader();
+      if (warnings.length) feedback(warnings.join(' '), true);
+      return;
+    }
+    if (slot === 'theme') {
+      const picked = themeRowsFromText(text, layer.name);
+      loader.theme = { ...picked, source: 'Loaded from ' + layer.name };
+      $('#fileThemeInfo').textContent =
+        layer.name + ' — ' + picked.count + ' areas, value column "' + picked.label + '"';
+      renderThemeValues();
+      validateLoader();
+      if (warnings.length) feedback(warnings.join(' '), true);
+      return;
+    }
+    // a table: the attributes of the layer, with the geometry as @lon/@lat
+    const table = parseTable(text, layer.name.replace(/\.shp$/i, '.geojson'));
+    loader.table = table;
+    loader.fileName = layer.name;
+    loader.mapping = guessMapping(
+      table.headers,
+      table.rows,
+      MAPPING_FIELDS.map(f => f[0]),
+    );
+    loader.options = {
+      title: '',
+      subtitle: '',
+      unit: '',
+      nodeLabel: 'place',
+      groupLabel: '',
+      inLabel: '',
+      outLabel: '',
+      source: '',
+    };
+    loader.theme = null;
+    if ($('#themeList')) renderThemeValues();
+    $('#fileTableInfo').textContent =
+      layer.name + ' — ' + table.rows.length.toLocaleString('en-US') + ' shapes';
+    $('#tablePanel').hidden = false;
+    renderPreview();
+    renderFields();
+    validateLoader();
+    if (warnings.length) feedback(warnings.join(' '), true);
+  } catch (e) {
+    feedback(e.message, true);
+    $('#err').textContent = e.message;
+    $('#err').hidden = false;
+  }
+}
+
+/** Chosen files, whatever they are: one table, or a shapefile to unpack. */
+async function takeTableFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'table');
+  return takeTable(list[0]);
 }
 
 async function takeTable(file) {
@@ -7689,6 +8615,13 @@ async function takeTable(file) {
     $('#err').textContent = e.message;
     $('#err').hidden = false;
   }
+}
+
+async function takeBoundaryFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'boundary');
+  return takeBoundary(list[0]);
 }
 
 async function takeBoundary(file) {
@@ -7809,6 +8742,13 @@ function renderThemeValues() {
   );
 }
 
+async function takeThemeFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (isShapefileChoice(list)) return takeShapefile(list, 'theme');
+  return takeTheme(list[0]);
+}
+
 async function takeTheme(file) {
   try {
     const text = await readFileText(file);
@@ -7873,19 +8813,10 @@ $('#bLoad').addEventListener('click', openDialog);
 $('#bClose').addEventListener('click', closeDialog);
 $('#bPickTable').addEventListener('click', () => $('#fileTable').click());
 $('#bPickBounds').addEventListener('click', () => $('#fileBounds').click());
-$('#fileTable').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeTable(ev.target.files[0]),
-);
-$('#fileBounds').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeBoundary(ev.target.files[0]),
-);
+$('#fileTable').addEventListener('change', ev => takeTableFiles(ev.target.files));
+$('#fileBounds').addEventListener('change', ev => takeBoundaryFiles(ev.target.files));
 $('#bPickTheme').addEventListener('click', () => $('#fileTheme').click());
-$('#fileTheme').addEventListener(
-  'change',
-  ev => ev.target.files[0] && takeTheme(ev.target.files[0]),
-);
+$('#fileTheme').addEventListener('change', ev => takeThemeFiles(ev.target.files));
 $('#bBuild').addEventListener('click', buildFromLoader);
 $('#bTemplate').addEventListener('click', () =>
   downloadBytes('flow-map-template.csv', new TextEncoder().encode(tableTemplate()), 'text/csv'),
@@ -7907,13 +8838,15 @@ addEventListener('dragleave', () => document.body.classList.remove('dropping'));
 addEventListener('drop', ev => {
   ev.preventDefault();
   document.body.classList.remove('dropping');
-  const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (!file) return;
-  if (!loader.table || !$('#dlg').hidden === false) openDialog();
-  if (/\.(geojson|topojson)$/i.test(file.name) || !loader.table) {
-    if (/\.(geojson|topojson)$/i.test(file.name)) takeBoundary(file);
-    else takeTable(file);
-  } else takeTable(file);
+  const dropped = Array.from((ev.dataTransfer && ev.dataTransfer.files) || []);
+  if (!dropped.length) return;
+  if (!$('#dlg').hidden) closeDialog();
+  openDialog();
+  // a shapefile arrives as several files at once: use them as one layer
+  if (isShapefileChoice(dropped)) return takeTableFiles(dropped);
+  const file = dropped[0];
+  if (/\.(geojson|topojson)$/i.test(file.name)) return takeBoundary(file);
+  return takeTable(file);
 });
 
 /* export menu */
@@ -7981,6 +8914,8 @@ const FRTXT = {
   'Next period': 'Période suivante',
   'Map layers': 'Couches de la carte',
   'Light / dark': 'Clair / sombre',
+  'Keyless tiles; None draws only your data and boundaries.':
+    'Tuiles sans clé ; « Aucun » ne dessine que vos données et vos limites.',
   'Strongest routes only; the analysis covers every route.':
     'Les plus fortes seulement ; l’analyse couvre toutes les routes.',
   'Route: weak → strong (arrow = direction)': 'Route : faible → fort (flèche = sens)',
@@ -8277,6 +9212,10 @@ const I = {
   bmLoops: [
     'Every flow in this table starts and ends at the same place: the two ends share one coordinate pair, so the records are counted inside each place. Give each end its own coordinates to draw movement between places.',
     'Tous les flux de cette table partent et arrivent au même endroit : les deux extrémités partagent la même paire de coordonnées, les enregistrements sont donc comptés à l’intérieur de chaque lieu. Donnez à chaque extrémité ses propres coordonnées pour dessiner un mouvement entre lieux.',
+  ],
+  bmNoRoutes: [
+    'No route can be drawn for this period and these filters — widen the period, clear the filters, or check the value column.',
+    'Aucune route ne peut être dessinée pour cette période et ces filtres — élargissez la période, videz les filtres, ou vérifiez la colonne des valeurs.',
   ],
   provSwitched: [
     (a, b) => a + ' would not serve tiles — switched to ' + b,
