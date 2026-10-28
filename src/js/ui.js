@@ -53,8 +53,16 @@ function setStyle(s) {
     for (const key of [...TILES.keys()])
       if (key.startsWith(p + '|') && TILES.get(key).err) TILES.delete(key);
   }
-  const ids = { dark: 'bDark', light: 'bLight', terrain: 'bTerrain', sat: 'bSat', none: 'bNone' };
-  for (const k in ids) $('#' + ids[k]).setAttribute('aria-pressed', k === s ? 'true' : 'false');
+  const ids = {
+    dark: ['bDark', 'bgDark'],
+    light: ['bLight', 'bgLight'],
+    terrain: ['bTerrain', 'bgTerrain'],
+    sat: ['bSat', 'bgSat'],
+    none: ['bNone', 'bgNone'],
+  };
+  for (const k in ids)
+    for (const id of ids[k])
+      if ($('#' + id)) $('#' + id).setAttribute('aria-pressed', k === s ? 'true' : 'false');
   updateStatus();
   if (RM) draw(0);
 }
@@ -97,6 +105,15 @@ $('#bLight').addEventListener('click', () => setStyle('light'));
 $('#bTerrain').addEventListener('click', () => setStyle('terrain'));
 $('#bSat').addEventListener('click', () => setStyle('sat'));
 $('#bNone').addEventListener('click', () => setStyle('none'));
+// the same choice, in the left column, where it cannot be missed
+for (const [id, s2] of [
+  ['bgLight', 'light'],
+  ['bgDark', 'dark'],
+  ['bgTerrain', 'terrain'],
+  ['bgSat', 'sat'],
+  ['bgNone', 'none'],
+])
+  if ($('#' + id)) $('#' + id).addEventListener('click', () => setStyle(s2));
 
 /* pointer */
 function pick(ev) {

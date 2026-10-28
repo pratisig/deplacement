@@ -81,6 +81,9 @@ function buildBounds(src, nodes) {
     c = Infinity,
     d = -Infinity;
   for (const n of nodes) {
+    // one unreadable coordinate must not turn the whole frame into NaN, which
+    // draws nothing at all and looks like a broken page
+    if (!Number.isFinite(n.lon) || !Number.isFinite(n.lat)) continue;
     a = Math.min(a, n.lon);
     b = Math.max(b, n.lon);
     c = Math.min(c, n.lat);

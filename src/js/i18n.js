@@ -23,6 +23,8 @@ const FRTXT = {
   'Next period': 'Période suivante',
   'Map layers': 'Couches de la carte',
   'Light / dark': 'Clair / sombre',
+  'Keyless tiles; None draws only your data and boundaries.':
+    'Tuiles sans clé ; « Aucun » ne dessine que vos données et vos limites.',
   'Strongest routes only; the analysis covers every route.':
     'Les plus fortes seulement ; l’analyse couvre toutes les routes.',
   'Route: weak → strong (arrow = direction)': 'Route : faible → fort (flèche = sens)',
@@ -319,6 +321,10 @@ const I = {
   bmLoops: [
     'Every flow in this table starts and ends at the same place: the two ends share one coordinate pair, so the records are counted inside each place. Give each end its own coordinates to draw movement between places.',
     'Tous les flux de cette table partent et arrivent au même endroit : les deux extrémités partagent la même paire de coordonnées, les enregistrements sont donc comptés à l’intérieur de chaque lieu. Donnez à chaque extrémité ses propres coordonnées pour dessiner un mouvement entre lieux.',
+  ],
+  bmNoRoutes: [
+    'No route can be drawn for this period and these filters — widen the period, clear the filters, or check the value column.',
+    'Aucune route ne peut être dessinée pour cette période et ces filtres — élargissez la période, videz les filtres, ou vérifiez la colonne des valeurs.',
   ],
   provSwitched: [
     (a, b) => a + ' would not serve tiles — switched to ' + b,

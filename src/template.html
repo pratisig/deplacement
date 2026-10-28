@@ -69,6 +69,18 @@
     </section>
 
     <section class="card">
+      <h2>Background map</h2>
+      <div class="seg bggrid" role="group" aria-label="Background map" id="bgPick">
+        <button id="bgLight" type="button" aria-pressed="true">Light</button>
+        <button id="bgDark" type="button" aria-pressed="false">Dark</button>
+        <button id="bgTerrain" type="button" aria-pressed="false">Terrain</button>
+        <button id="bgSat" type="button" aria-pressed="false">Satellite</button>
+        <button id="bgNone" type="button" aria-pressed="false">None</button>
+      </div>
+      <p class="phint">Keyless tiles; None draws only your data and boundaries.</p>
+    </section>
+
+    <section class="card">
       <h2>Legend</h2>
       <ul class="legend">
         <li><span class="sw" style="background:var(--recv)"></span><span id="lgIn">More in than out</span></li>
@@ -164,9 +176,9 @@
     <p class="hint">One row per flow. The columns below are detected from the header row — adjust anything that looks wrong. Nothing leaves your browser.</p>
 
     <div class="drop" id="dropTable">
-      <input type="file" id="fileTable" accept=".csv,.tsv,.txt,.json,.geojson,text/csv,application/json" hidden>
+      <input type="file" id="fileTable" accept=".csv,.tsv,.txt,.json,.geojson,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickTable" type="button">Choose a table…</button>
-      <span class="file" id="fileTableInfo">CSV, TSV or JSON — or drop the file here</span>
+      <span class="file" id="fileTableInfo">CSV, TSV, JSON or GeoJSON — or a shapefile (.zip, or the .shp and .dbf together)</span>
     </div>
 
     <div id="tablePanel" hidden>
@@ -176,20 +188,22 @@
     </div>
 
     <div class="drop" id="dropBounds">
-      <input type="file" id="fileBounds" accept=".geojson,.json" hidden>
+      <input type="file" id="fileBounds" accept=".geojson,.json,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickBounds" type="button">Add boundaries… (optional)</button>
-      <span class="file" id="fileBoundsInfo">GeoJSON areas: gives map outlines and lets places be found by name</span>
+      <span class="file" id="fileBoundsInfo">GeoJSON areas or a polygon shapefile: gives map outlines and lets places be found by name</span>
     </div>
     <div id="boundsList" class="bounds"></div>
 
     <div class="drop" id="dropTheme">
-      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson" hidden>
+      <input type="file" id="fileTheme" accept=".csv,.tsv,.txt,.json,.geojson,.zip,.shp,.dbf,.shx,.prj" multiple hidden>
       <button class="act" id="bPickTheme" type="button">Add values by area… (optional)</button>
       <span class="file" id="fileThemeInfo">A polygon layer, or a table of area names and values</span>
     </div>
     <div id="themeList" class="bounds"></div>
 
+    <p class="geosum" id="geoSum"></p>
     <p class="err" id="err" hidden></p>
+    <p class="warnbox" id="geoWarn" hidden></p>
 
     <div class="dlg-actions">
       <button class="act" id="bTemplate" type="button">Template CSV</button>

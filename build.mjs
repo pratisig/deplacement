@@ -25,6 +25,7 @@ const SCRIPTS = [
   'core.js',
   'geo.js',
   'table.js',
+  'shpread.js',
   'sources.js',
   'dataset.js',
   'projection.js',

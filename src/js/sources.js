@@ -445,6 +445,49 @@ function assembleDataset({ table, mapping, boundaries = [], options = {}, theme 
 }
 
 /** Field list for the mapping form, with per-field validity notes. */
+/** The numbers of one column, as far as they can be read. */
+function columnNumbers(table, header, limit = 300) {
+  const out = [];
+  for (const row of table.rows.slice(0, limit)) {
+    const v = num(row[header]);
+    if (v !== null) out.push(v);
+  }
+  return out;
+}
+
+/** Share of the sampled values that fall outside a range. */
+function outsideShare(values, lo, hi) {
+  if (!values.length) return 0;
+  let bad = 0;
+  for (const v of values) if (v < lo || v > hi) bad++;
+  return bad / values.length;
+}
+
+/** The four coordinate columns the mapping points at, with their spread. */
+function coordinateReport(mapping, table) {
+  const has = c => Boolean(c && table.headers.includes(c));
+  const pair = (lonKey, latKey, side) => {
+    const lon = has(mapping[lonKey]) ? mapping[lonKey] : '',
+      lat = has(mapping[latKey]) ? mapping[latKey] : '';
+    if (!lon && !lat) return null;
+    const lons = lon ? columnNumbers(table, lon) : [],
+      lats = lat ? columnNumbers(table, lat) : [];
+    return {
+      side,
+      lon,
+      lat,
+      lons,
+      lats,
+      lonBad: outsideShare(lons, -180, 180),
+      latBad: outsideShare(lats, -90, 90),
+      lonSpan: lons.length ? Math.max(...lons) - Math.min(...lons) : 0,
+      latSpan: lats.length ? Math.max(...lats) - Math.min(...lats) : 0,
+    };
+  };
+  return [pair('oLon', 'oLat', 'origin'), pair('dLon', 'dLat', 'destination')].filter(Boolean);
+}
+
+/** Problems that would draw nothing, or draw it in the wrong place. */
 function mappingIssues(mapping, table, boundaries) {
   const issues = [];
   const has = c => Boolean(c && table.headers.includes(c));
@@ -455,7 +498,141 @@ function mappingIssues(mapping, table, boundaries) {
     (has(mapping.oLon) && has(mapping.oLat)) || (has(mapping.dLon) && has(mapping.dLat));
   if (!coords && !boundaries.length)
     issues.push('Without coordinates, load a boundary file so places can be matched by name.');
+
+  // A column whose own header says "latitude", or says the other end, is the
+  // crossing that put every place in the wrong spot. The names are unambig-
+  // uous here, so this is a refusal, not a guess.
+  const AXIS_WORD = { lon: 'a longitude', lat: 'a latitude' };
+  for (const [key, want] of [
+    ['oLon', 'lon'],
+    ['oLat', 'lat'],
+    ['dLon', 'lon'],
+    ['dLat', 'lat'],
+  ]) {
+    const col = mapping[key];
+    if (!has(col)) continue;
+    const axis = coordAxisOf(col);
+    const side = coordSideOf(col);
+    const wantSide = key[0] === 'o' ? 'o' : 'd';
+    if (axis && axis !== want)
+      issues.push(
+        'The column "' +
+          col +
+          '" is ' +
+          AXIS_WORD[axis] +
+          ', but it is used for the ' +
+          (key[0] === 'o' ? 'origin' : 'destination') +
+          ' ' +
+          (want === 'lon' ? 'longitude' : 'latitude') +
+          '. Pick the right column.',
+      );
+    else if (side && side !== wantSide)
+      issues.push(
+        'The column "' +
+          col +
+          '" names the ' +
+          (side === 'o' ? 'origin' : 'destination') +
+          ', but it is in the ' +
+          (key[0] === 'o' ? 'origin' : 'destination') +
+          ' ' +
+          want +
+          ' slot. Pick the right column.',
+      );
+  }
+
+  for (const c of coordinateReport(mapping, table)) {
+    const where = c.side === 'origin' ? 'origin' : 'destination';
+    if (c.lonBad > 0.2)
+      issues.push(
+        'The ' +
+          where +
+          ' longitude column "' +
+          c.lon +
+          '" holds values that cannot be a longitude (over 180). ' +
+          (c.lat && c.lonBad > 0.8 && outsideShare(c.lats, -90, 90) === 0
+            ? 'The longitude and latitude columns look swapped: put "' +
+              c.lat +
+              '" in longitude and "' +
+              c.lon +
+              '" in latitude.'
+            : 'Pick the longitude column again.'),
+      );
+    else if (c.latBad > 0.2)
+      issues.push(
+        'The ' +
+          where +
+          ' latitude column "' +
+          c.lat +
+          '" holds values that cannot be a latitude (over 90). Pick the right column.',
+      );
+  }
   return issues;
+}
+
+/**
+ * Notes that do not stop the build but explain a map that looks empty:
+ * two ends on the same point, a pair of columns that never moves, and so on.
+ */
+function mappingWarnings(mapping, table) {
+  const notes = [];
+  const report = coordinateReport(mapping, table);
+  const rows = table.rows.slice(0, 300);
+  const has = c => Boolean(c && table.headers.includes(c));
+  const samePairs =
+    has(mapping.oLon) &&
+    has(mapping.dLon) &&
+    has(mapping.oLat) &&
+    has(mapping.dLat) &&
+    (mapping.oLon !== mapping.dLon || mapping.oLat !== mapping.dLat);
+  if (samePairs) {
+    let same = 0,
+      seen = 0;
+    for (const row of rows) {
+      const a = num(row[mapping.oLon]),
+        b = num(row[mapping.oLat]),
+        c2 = num(row[mapping.dLon]),
+        d2 = num(row[mapping.dLat]);
+      if (a === null || b === null || c2 === null || d2 === null) continue;
+      seen++;
+      if (Math.abs(a - c2) < 1e-4 && Math.abs(b - d2) < 1e-4) same++;
+    }
+    if (seen && same === seen)
+      notes.push(
+        'Every row starts and ends at the same point, so no line can be drawn: check that the origin and destination coordinate columns are not the same pair.',
+      );
+    else if (seen && same / seen > 0.9)
+      notes.push(
+        Math.round((same / seen) * 100) +
+          ' % of the rows start and end at the same point: the map will show loops, not lines.',
+      );
+  }
+  for (const c of report) {
+    if (c.lons.length < 2) continue;
+    if (c.lonSpan < 1e-6 && c.latSpan < 1e-6)
+      notes.push(
+        'Every ' +
+          (c.side === 'origin' ? 'origin' : 'destination') +
+          ' point is at the same place.',
+      );
+  }
+  return notes;
+}
+
+/** One line for the dialog: how many places, and where they are. */
+function coordinateSummary(mapping, table) {
+  const report = coordinateReport(mapping, table);
+  if (!report.length) return '';
+  const bits = report.map(c => {
+    if (!c.lons.length && !c.lats.length) return '';
+    const lon = c.lons.length
+      ? Math.min(...c.lons).toFixed(2) + '…' + Math.max(...c.lons).toFixed(2)
+      : '?';
+    const lat = c.lats.length
+      ? Math.min(...c.lats).toFixed(2) + '…' + Math.max(...c.lats).toFixed(2)
+      : '?';
+    return (c.side === 'origin' ? 'Origin' : 'Destination') + ' lon ' + lon + ', lat ' + lat;
+  });
+  return bits.filter(Boolean).join('  ·  ');
 }
 
 /** A small CSV the user can fill in, written from the current mapping. */
